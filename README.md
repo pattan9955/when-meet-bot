@@ -1,2 +1,4 @@
 # when-meet-bot
-A Telegram bot that accepts multiple e-calendar files (.ics format) and finds common free times
+A Telegram bot that accepts and stores multiple e-calendar files (.ics format) and finds common free times when queried.
+
+
