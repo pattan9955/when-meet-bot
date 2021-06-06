@@ -1,7 +1,8 @@
-# import icalendar
+import icalendar
 from datetime import datetime, timedelta
 import copy
 from intervaltree import Interval, IntervalTree
+import recurring_ical_events
 
 # class Event():
 #     '''
@@ -21,17 +22,17 @@ from intervaltree import Interval, IntervalTree
 #     def __eq__(self, other) -> bool:
 #         self.start_datetime == other.start_datetime
 
+    
 def merge_ics(in_filepath, out_filepath):
     '''
     Take as input a list of strings indicating filepaths to .ics files and merges the events
-    in each .ics file into one large .ics file, that is written to out_filepath.
+    in each .ics file into one large .ics file, that is written to out_filepath as a new .ics file.
 
     Future Changes:
-    1) Return a string/list representation of the .ics file instead of creating a new
-    .ics file.
+    1) Change function to return a string representation of the resultant merged .ics file rather than creating the file
 
-    :param in_filepath: A list containing filepaths (as strings) to .ics files
-    :param out_filepath: A string indicating the filepath that the output .ics file will be created
+    :param in_filepath: A list of strings indicating filepaths to .ics files.
+    :param out_filepath: A string indicating the filepath where the output .ics file should be created in
     '''
     calxs = ["BEGIN:VCALENDAR\n"]
     for filepath in in_filepath:
@@ -45,12 +46,6 @@ def merge_ics(in_filepath, out_filepath):
                 elif line == "BEGIN:VEVENT\n":
                     take = True
                     intermediate.append(line)
-                # elif line[:7] == "DTSTART":
-                #     # perform checks
-                #     pass
-                # elif line[:5] == "DTEND":
-                #     # perform checks
-                #     pass
                 else:
                     if take:
                         intermediate.append(line)
@@ -63,22 +58,43 @@ def merge_ics(in_filepath, out_filepath):
         f.write(line)
     f.close()
 
-def parse_output_ics(in_filepath):
+def new_parse_output_ics(in_filepath, start_datetime, end_datetime):
+    '''
+    Takes as input a filepath to an .ics file and a start/end datetime, and returns 
+    a list of events in the .ics file that fall between the provided start/end datetimes, 
+    represented as lists of [start_datetime, end_datetime], sorted in ascending order by 
+    start_datetime. Function unfolds recurring events, preserves provided timezone 
+    information and deals with EXDATEs for recurring events.
+    '''
+    
+    f = open(in_filepath, 'rb')
+    fcal = icalendar.Calendar.from_ical(f.read())
+    
+    # Unfolds all events (Including recurring events) between start and end datetime
+    events = recurring_ical_events.of(fcal).between(start_datetime, end_datetime)
+    
+    event_list = []
+    for event in events:
+        event_list.append([event['DTSTART'].dt, event['DTEND'].dt])
+    
+    return sorted(event_list, key=lambda e : e[0])
+
+# def parse_output_ics(in_filepath):
     '''
     Takes as input a filepath to a .ics file and returns a list of events in the ics file,
     represented as lists of [start_datetime, end_datetime], sorted in ascending order
-    by start_datetime
+    by start_datetime.
 
-    Issues: 
+    Future Changes: 
     1) Currently does not work on recurring events
     2) Currently does not deal with events where end_datetime does not exist
-    
-    Future changes:
-    1) Change the input to be a string representing an .ics file rather than a filepath
+    3) Change input to function to take in a string representation of an .ics file in line with 
+        future changes to merge_ics
+    4) Currently does not work on different timezones. (Consider using regex matching)
 
-    :param in_filepath: A string representing the filepath of the .ics file to be parsed
-    :returns: A sorted list of events, with each event represented as a list containing 
-                a start datetime object and end datetime object
+    :param in_filepath: A string representing a filepath to the .ics file to be parsed.
+    :returns: A list of events, represented as a list of lists of [start_datetime, end_datetime], sorted in ascending order
+            by start_datetime.
     '''
     events_list = []
     with open(in_filepath) as f:
@@ -87,7 +103,7 @@ def parse_output_ics(in_filepath):
         
         for line in f:
             # When start datetime found
-            if line.split(":")[0] == "DTSTART":
+            if line[0:7] == "DTSTART":
                 start_date = line.split(":")[1].strip()
                 
                 # Deal with UTC dates
@@ -98,7 +114,7 @@ def parse_output_ics(in_filepath):
                 start_date_temp = datetime.strptime(start_date, "%Y%m%dT%H%M%S")
 
             # When end datetime found
-            elif line.split(":")[0] == "DTEND":
+            elif line[0:5] == "DTEND":
                 end_date = line.split(":")[1].strip()
 
                 # Deal with UTC dates
@@ -117,15 +133,21 @@ def parse_output_ics(in_filepath):
     
     return sorted(events_list, key = lambda e : e[0])
  
-def filter(events_list, start_date, end_date):
+# def filter(events_list, start_date, end_date):
     '''
-    Takes a list of events represented as a list of lists containing start and end datetime objects,
-    and returns a filtered list of events that occur between the given start and end date only.
+    Takes in a list of events represented as a list of lists of [start_datetime, end_datetime] and
+    filters out events that do not overlap with the interval [start_date, end_date] as prescribed
+    by the user. Operation performed using an interval tree.
 
-    :param events_list: A list of events represented as a list of lists containing start and end datetime objects.
-    :param start_date: A datetime object representing the start of the user's desired search space.
-    :param end_date: A datetime object representing the end of the user's desired search space.
-    :returns: A list of events that occur between the user's provided start and end date inclusive.
+    Future Changes:
+    1) Currently does not handle overnight events properly in filtering, since events that spill over to 
+    the next day retain their original end date -> Causes KeyError in main function. Need to manually edit the 
+    start/end date during filtering so as to respect the provided start/end date by the user.
+
+    :param events_list: A list of events represented as a list of lists of [start_datetime, end_datetime]
+    :param start_date: A datetime object representing the start date of the desired search space.
+    :param end_date: A datetime object representing the end date of the desired search space.
+    :returns: A filtered list of events that overlap with the given [start_date, end_date] interval.
     '''
     interval_list = []
     for event in events_list:
@@ -141,34 +163,39 @@ def filter(events_list, start_date, end_date):
         temp = [item.begin, item.end]
         filtered.append(temp)
     
+    # print(filtered)
     return filtered
 
 def daterange(start_date, end_date):
     '''
-    Takes as input a start and end date and iterates through each date.
+    A function that allows for iteration of all dates between the provided start and end date.
 
-    :param start_date: The datetime object representing the start date.
-    :param end_date: The datetime object representing the end date.
-    :returns: A generator that allows for iteration between the provided start and end date
+    :param start_date: A datetime object representing the start date of the iteration.
+    :param end_date: A datetime object representing the end date of the iteration.
+    :returns: A generator that allows for iteration of all dates between the provided start and end dates.
     '''
     for n in range(int((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
 def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interval):
     '''
-    Given a list of filepaths to .ics files, prints out common free times of at least the minimum user provided
-    interval for each day between the user's provided start and end date.
+    A function that takes in a list of filepaths to .ics files and prints common blocks of free time that are
+    at least as long as the given minimum duration between the given start and end date.
 
     Future Changes:
-    1) Might have to return the dictionary in future (Tentative).
+    1) Change the printing format of the results.
+        i) Time intervals to be formatted as datetime objects.
+        ii) To be optimized for viewing in a Telegram bot/app environment.
+    2) Results may need to be returned from the function for further processing by other functions.
 
-    :param in_filepath: A list of strings representing filepaths to .ics files.
-    :param start_datetime: A datetime object that represents the start date of the user's desired search space.
-    :param end_datetime: A datetime object that represents the end date of the user's desired search space.
-    :param min_hourly_interval: A number denoting the minimum number of hours for a block of common free time to be considered valid.
+    :param in_filepath: A list of strings indicating filepaths to .ics files.
+    :param start_datetime: A datetime object representing the start date of the desired search interval.
+    :param end_datetime: A datetime object representing the end date of the desired search interval.
+    :param min_hourly_interval: A number representing the minimum duration a block of free time needs to be
+            in order to be considered a valid block of free time.
     '''
-    merge_ics(in_filepath, 'out.ics')
-    events = filter(parse_output_ics('out.ics'), start_datetime, end_datetime)
+    merge_ics(in_filepath, './Milestone 1/out.ics')
+    events = new_parse_output_ics('./Milestone 1/out.ics', start_datetime, end_datetime)
     
     # Check for case where end_datetime less than start_datetime
     try:
@@ -182,7 +209,7 @@ def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interva
 
     free_time_dict = {}
     for date in daterange(start_date, end_date + timedelta(days=1)):
-        free_time_dict[date] = [True for i in range(23)]
+        free_time_dict[date] = [True for i in range(24)]
     
     for event in events:
         event_start_date = event[0].date()
@@ -194,14 +221,14 @@ def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interva
         # Case 1: Start and end date are the same
         if (event_start_date == event_end_date):
             temp = free_time_dict[event_start_date]
-            for i in range(event_start_time, event_end_time + 1):
+            for i in range(event_start_time, event_end_time):
                 temp[i] = False
         
         # Case 2: Start and end date are different
         else:
             # Label all dates between start exclusive and end exclusive to be false
             for date in daterange(event_start_date + timedelta(days=1), event_end_date):
-                free_time_dict[date] = [False for i in range(23)]
+                free_time_dict[date] = [False for i in range(24)]
             
             # Look only at start and end dates and label accordingly
             temp = free_time_dict[event_start_date]
@@ -211,7 +238,8 @@ def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interva
             temp = free_time_dict[event_end_date]
             for i in range(0, event_end_time + 1):
                 temp[i] = False
-    
+
+    # print(free_time_dict)
     final_results = {}
 
     # Find intervals of min size provided
@@ -240,6 +268,6 @@ def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interva
     print(final_results)    
 
 if __name__ == '__main__':
-    start = datetime(2021, 1, 11, 0, 0, 0)
-    end = datetime(2021, 3, 16, 18, 0, 0)
-    find_free_time(['./test ics files/nay.ics', './test ics files/pat.ics'], start, end, 5)
+    start = datetime(2021, 4, 30)
+    end = datetime(2021, 7, 1)
+    find_free_time(['./Milestone 1/test ics files/recur.ics', './Milestone 1/test ics files/test2.ics'], start, end, 1)
