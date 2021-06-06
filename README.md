@@ -6,13 +6,9 @@ proofOfConcept.py is a Python script that describes an algorithm which accepts a
 A skeleton for the Telegram bot has been prepared with a connection to the Firebase Realtime Database that will be used to store the provided .ics files. Additional features will be made for the Telegram bot in future.
 
 Known Issues:
-1) Algorithm does not properly deal with overnight events in the filter() function.
-2) Parsing currently does not properly deal with recurring events
-3) Parsing currently does not properly deal with events with no specified end time
-4) Parsing currently ignores timezone information. May consider standardizing all timings to UTC or GMT +8 (Singapore) time.
+1) Parsing currently ignores timezone information. May consider standardizing all timings to UTC or GMT +8 (Singapore) time.
 
 Todo:
 1) Implement find function for the Telegram bot.
 2) Implement help function for the Telegram bot.
 3) Implement uploading of .ics files for the Telegram bot.
-3) Deal with aforementioned issues, in particular issues #1 and #2.

@@ -5,22 +5,22 @@ from intervaltree import Interval, IntervalTree
 import recurring_ical_events
 
 # class Event():
-#     '''
-#     Constructor for an event. Event should contain a starting datetime, an ending datetime and a string representation
-#     of the event as defined in the .ics file.
+    # '''
+    # Constructor for an event. Event should contain a starting datetime, an ending datetime and a string representation
+    # of the event as defined in the .ics file.
 
-#     Events are ordered by their start_datetime
-#     '''
-#     def __init__(self, start_datetime, end_datetime, string_rep, is_recurring, EXDATE_ls, recur_rules) -> None:
-#         self.start_datetime  = start_datetime
-#         self.end_datetime = end_datetime
-#         self.string_rep = string_rep
+    # Events are ordered by their start_datetime
+    # '''
+    # def __init__(self, start_datetime, end_datetime, string_rep, is_recurring, EXDATE_ls, recur_rules) -> None:
+    #     self.start_datetime  = start_datetime
+    #     self.end_datetime = end_datetime
+    #     self.string_rep = string_rep
 
-#     def __repr__(self) -> str:
-#         return repr((self.start_datetime, self.end_datetime, self.string_rep))
+    # def __repr__(self) -> str:
+    #     return repr((self.start_datetime, self.end_datetime, self.string_rep))
 
-#     def __eq__(self, other) -> bool:
-#         self.start_datetime == other.start_datetime
+    # def __eq__(self, other) -> bool:
+    #     self.start_datetime == other.start_datetime
 
     
 def merge_ics(in_filepath, out_filepath):
@@ -65,6 +65,21 @@ def new_parse_output_ics(in_filepath, start_datetime, end_datetime):
     represented as lists of [start_datetime, end_datetime], sorted in ascending order by 
     start_datetime. Function unfolds recurring events, preserves provided timezone 
     information and deals with EXDATEs for recurring events.
+
+    Future Changes:
+    1) Change input to function to take in a string representation of an .ics file 
+        in line with future changes to merge_ics
+    2) Currently does not do anything with provided timezone information. May
+        consider standardizing to UTC or GMT+8 (SG) time, or allowing user to 
+        specify a specific timezone.
+
+    :param in_filepath: A string representing a filepath to the .ics file to be parsed.
+    :param start_datetime: A tuple representing a datetime object or a datetime object
+        indicating the start datetime of the desired search space.
+    :param end_datetime: A tuple representing a datetime object or a datetime object
+        indicating the end datetime of the desired search space.
+    :returns: A filtered list of events that overlap with the given 
+        [start_datetime, end_datetime] sorted in ascending order by start_datetime.
     '''
     
     f = open(in_filepath, 'rb')
@@ -268,6 +283,6 @@ def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interva
     print(final_results)    
 
 if __name__ == '__main__':
-    start = datetime(2021, 4, 30)
-    end = datetime(2021, 7, 1)
-    find_free_time(['./Milestone 1/test ics files/recur.ics', './Milestone 1/test ics files/test2.ics'], start, end, 1)
+    start = datetime(2021, 5, 31)
+    end = datetime(2021, 6, 1, 0, 0)
+    find_free_time(['./Milestone 1/test ics files/test1.ics', './Milestone 1/test ics files/test2.ics'], start, end, 1)
