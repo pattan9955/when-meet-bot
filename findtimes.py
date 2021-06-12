@@ -22,58 +22,50 @@ import recurring_ical_events
     # def __eq__(self, other) -> bool:
     #     self.start_datetime == other.start_datetime
 
-    
-def merge_ics(in_filepath, out_filepath):
+def merge_ics(incoming_ics):
     '''
-    Take as input a list of strings indicating filepaths to .ics files and merges the events
-    in each .ics file into one large .ics file, that is written to out_filepath as a new .ics file.
+    Take as input a list of strings containing the contents of .ics files and merges the events
+    in each .ics file into a string representing the contents of a new .ics file.
 
-    Future Changes:
-    1) Change function to return a string representation of the resultant merged .ics file rather than creating the file
-
-    :param in_filepath: A list of strings indicating filepaths to .ics files.
-    :param out_filepath: A string indicating the filepath where the output .ics file should be created in
+    :param incoming_ics: A list of strings containing contents of .ics files
+    :returns: A string containing the contents of the merged .ics files
     '''
-    calxs = ["BEGIN:VCALENDAR\n"]
-    for filepath in in_filepath:
-        with open(filepath) as f:
-            intermediate = []
+
+    calxs = "BEGIN:VCALENDAR\n"
+    for file in incoming_ics:
+            intermediate = ""
             take = False
-            for line in f:
+            temp = file.split('\n')
+
+            for line in temp:
                 if line == "END:VEVENT\n":
                     take = False
-                    intermediate.append(line)
+                    intermediate += line
                 elif line == "BEGIN:VEVENT\n":
                     take = True
-                    intermediate.append(line)
+                    intermediate += line
                 else:
                     if take:
-                        intermediate.append(line)
-            calxs.extend(intermediate)
-        f.close()
-    calxs.append("END:VCALENDAR")
+                        intermediate += line
+            calxs += intermediate
 
-    f = open(out_filepath, 'w')
-    for line in calxs:
-        f.write(line)
-    f.close()
+    calxs += "END:VCALENDAR"
+    return calxs
 
-def new_parse_output_ics(in_filepath, start_datetime, end_datetime):
+def new_parse_output_ics(cal_str, start_datetime, end_datetime):
     '''
-    Takes as input a filepath to an .ics file and a start/end datetime, and returns 
-    a list of events in the .ics file that fall between the provided start/end datetimes, 
+    Takes as input a string representing the contents of an .ics file and a start/end datetime, 
+    and returns a list of events in the .ics file that fall between the provided start/end datetimes, 
     represented as lists of [start_datetime, end_datetime], sorted in ascending order by 
     start_datetime. Function unfolds recurring events, preserves provided timezone 
     information and deals with EXDATEs for recurring events.
 
     Future Changes:
-    1) Change input to function to take in a string representation of an .ics file 
-        in line with future changes to merge_ics
-    2) Currently does not do anything with provided timezone information. May
+    1) Currently does not do anything with provided timezone information. May
         consider standardizing to UTC or GMT+8 (SG) time, or allowing user to 
         specify a specific timezone.
 
-    :param in_filepath: A string representing a filepath to the .ics file to be parsed.
+    :param cal_str: A string representing the contents of an .ics file
     :param start_datetime: A tuple representing a datetime object or a datetime object
         indicating the start datetime of the desired search space.
     :param end_datetime: A tuple representing a datetime object or a datetime object
@@ -82,8 +74,7 @@ def new_parse_output_ics(in_filepath, start_datetime, end_datetime):
         [start_datetime, end_datetime] sorted in ascending order by start_datetime.
     '''
     
-    f = open(in_filepath, 'rb')
-    fcal = icalendar.Calendar.from_ical(f.read())
+    fcal = icalendar.Calendar.from_ical(cal_str)
     
     # Unfolds all events (Including recurring events) between start and end datetime
     events = recurring_ical_events.of(fcal).between(start_datetime, end_datetime)
@@ -192,7 +183,7 @@ def daterange(start_date, end_date):
     for n in range(int((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
-def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interval):
+def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_interval):
     '''
     A function that takes in a list of filepaths to .ics files and prints common blocks of free time that are
     at least as long as the given minimum duration between the given start and end date.
@@ -209,8 +200,7 @@ def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interva
     :param min_hourly_interval: A number representing the minimum duration a block of free time needs to be
             in order to be considered a valid block of free time.
     '''
-    merge_ics(in_filepath, './Milestone 1/out.ics')
-    events = new_parse_output_ics('./Milestone 1/out.ics', start_datetime, end_datetime)
+    events = new_parse_output_ics(merge_ics(input_ics_strs) , start_datetime, end_datetime)
     
     # Check for case where end_datetime less than start_datetime
     try:
@@ -283,6 +273,67 @@ def find_free_time(in_filepath, start_datetime, end_datetime, min_hourly_interva
     print(final_results)    
 
 if __name__ == '__main__':
+    str1 = '''BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//ical.marudot.com//iCal Event Maker
+        CALSCALE:GREGORIAN
+        BEGIN:VTIMEZONE
+        TZID:Asia/Shanghai
+        TZURL:http://tzurl.org/zoneinfo-outlook/Asia/Shanghai
+        X-LIC-LOCATION:Asia/Shanghai
+        BEGIN:STANDARD
+        TZOFFSETFROM:+0800
+        TZOFFSETTO:+0800
+        TZNAME:CST
+        DTSTART:19700101T000000
+        END:STANDARD
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        DTSTAMP:20210531T134415Z
+        UID:20210531T134415Z-689865720@marudot.com
+        DTSTART;TZID=Asia/Shanghai:20210531T010000
+        DTEND;TZID=Asia/Shanghai:20210531T040000
+        SUMMARY:event1
+        END:VEVENT
+        BEGIN:VEVENT
+        DTSTAMP:20210531T134415Z
+        UID:20210531T134415Z-805750837@marudot.com
+        DTSTART;TZID=Asia/Shanghai:20210531T070000
+        DTEND;TZID=Asia/Shanghai:20210531T130000
+        SUMMARY:Event 2
+        END:VEVENT
+        END:VCALENDAR'''
+    str2 = '''BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//ical.marudot.com//iCal Event Maker
+        CALSCALE:GREGORIAN
+        BEGIN:VTIMEZONE
+        TZID:Asia/Shanghai
+        TZURL:http://tzurl.org/zoneinfo-outlook/Asia/Shanghai
+        X-LIC-LOCATION:Asia/Shanghai
+        BEGIN:STANDARD
+        TZOFFSETFROM:+0800
+        TZOFFSETTO:+0800
+        TZNAME:CST
+        DTSTART:19700101T000000
+        END:STANDARD
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        DTSTAMP:20210531T134415Z
+        UID:20210531T134415Z-689865720@marudot.com
+        DTSTART;TZID=Asia/Shanghai:20210531T010000
+        DTEND;TZID=Asia/Shanghai:20210531T040000
+        SUMMARY:event1
+        END:VEVENT
+        BEGIN:VEVENT
+        DTSTAMP:20210531T134415Z
+        UID:20210531T134415Z-805750837@marudot.com
+        DTSTART;TZID=Asia/Shanghai:20210531T070000
+        DTEND;TZID=Asia/Shanghai:20210531T130000
+        SUMMARY:Event 2
+        END:VEVENT
+        END:VCALENDAR'''
+    
     start = datetime(2021, 5, 31)
     end = datetime(2021, 6, 1, 0, 0)
-    find_free_time(['./Milestone 1/test ics files/test1.ics', './Milestone 1/test ics files/test2.ics'], start, end, 1)
+    find_free_time([str1, str2], start, end, 1)
