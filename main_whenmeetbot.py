@@ -1,7 +1,4 @@
-import json
-import requests
-import time
-import telegram
+from datetime import datetime
 import pyrebase
 import os
 
@@ -9,7 +6,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, ConversationHandler, MessageHandler, Filters, updater
 
 from secret_token import DB_TOKEN, TOKEN #local secret.py file
-from proofOfConcept import *
+from findtimes import *
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
@@ -37,7 +34,7 @@ def help(update, context):
         chat_id=update.message.chat_id
     )
 
-def cancel(update, context):
+def cancel_upload(update, context):
     text = 'upload iz kil'
     context.bot.send_message(
         text=text,
@@ -47,6 +44,26 @@ def cancel(update, context):
 
 #TODO
 def find(update, context):
+    pass
+
+#TODO
+def find_persons_to_query(update, context):
+    pass
+
+#TODO
+def cancel_find(update, context):
+    pass
+
+#TODO
+def find_start_time(update, context):
+    pass
+
+#TODO
+def find_end_time(update, context):
+    pass
+
+#TODO
+def find_min_interval(update, context):
     pass
 
 def upload(update, context):
@@ -101,7 +118,6 @@ def not_understood(update, context):
     )
     return 2
 
-#TODO
 def on_doc_upload(update, context):
     # # Check if message sent from group. If not, prompt user to add bot to group
     # if update.message.chat.type != "group" and update.message.chat.type  != "supergroup":
@@ -127,13 +143,23 @@ def on_doc_upload(update, context):
             content += line
     os.remove('{}'.format(fileid))
 
-    # Write ics file to database if 
+    # Write ics file to database if no entry for user present
     if db.child(group).child(user).get().val() == None:
         db.child(group).child(user).set(content)
-        print('Added')
+        # print('Added')
+
+    # Otherwise update the file if entry for user already present
     else:
-        db.child(group)
-    
+        db.child(group).update({user : content})
+        # print('Updated')
+
+    confirmation = "UwU bot-chan has successfully uploaded {}'s file...baka".format(update.message.from_user.username)
+    context.bot.send_message(
+        text=confirmation,
+        chat_id=group
+    )
+
+    return ConversationHandler.END
 
 def main():
     updater = Updater(TOKEN, use_context=True)
@@ -149,22 +175,25 @@ def main():
     upload_conv_handler = ConversationHandler(
         entry_points=[CommandHandler('upload', upload)],
         states={
-            1 : [MessageHandler(Filters.document.file_extension("ics"), on_doc_upload), CommandHandler('cancel', cancel)],
+            1 : [MessageHandler(Filters.document.file_extension("ics"), on_doc_upload), CommandHandler('cancel', cancel_upload)],
             2 : [MessageHandler(Filters.regex('(?i)^yes$|^no$'), ask_confirmation), MessageHandler(~Filters.regex('(?i)^yes$|^no$'), not_understood)]
         },
-        fallbacks=[MessageHandler(~Filters.document.file_extension("ics"), reprompt), CommandHandler('cancel', cancel)]
+        fallbacks=[MessageHandler(~Filters.document.file_extension("ics"), reprompt), CommandHandler('cancel', cancel_upload)]
     )
     dp.add_handler(upload_conv_handler)
 
     # Add conversation handler for querying bot
-    # conv_handler = ConversationHandler(
-    #     entry_points=[CommandHandler('find', find)],
-    #     states={
-    #         1 : MessageHandler()
-    #     }
-    # )
-    
-    # dp.add_handler(conv_handler)
+    query_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('find', find)],
+        states={
+            1 : [MessageHandler(Filters.text, find_persons_to_query), CommandHandler("cancel", cancel_find)],
+            2 : [MessageHandler(Filters.text, find_start_time), CommandHandler("cancel", cancel_find)],
+            3 : [MessageHandler(Filters.text, find_end_time), CommandHandler("cancel", cancel_find)],
+            4 : [MessageHandler(Filters.text, find_min_interval), CommandHandler("cancel", cancel_find)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel_find)]
+    )
+    dp.add_handler(query_conv_handler)
 
     updater.start_polling()
 
