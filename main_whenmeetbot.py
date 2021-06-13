@@ -74,6 +74,8 @@ def find(update, context):
     # Check if query done from group or PM with bot
     chat_type = update.message.chat.type
     context.chat_data['included'] = []
+    context.chat_data['name_id_map'] = {}
+    context.chat_data['params'] = {}
 
     # Query from group chat
     if chat_type == 'group' or chat_type == 'supergroup':
@@ -102,7 +104,7 @@ def find(update, context):
             fullname = update.message.chat.get_member(userid).user.full_name
             final_name = "{} ({})".format(fullname, username)
 
-            context.chat_data[final_name] = userid
+            context.chat_data['name_id_map'][final_name] = userid
             
             if rowcnt < 3:
                 row.append(final_name)
@@ -142,7 +144,7 @@ def find(update, context):
         
         context.chat_data['included'].extend(data)
 
-        start_time_prompt = ">w< bot-chan found your ics file uwu plz gib bot-chan a start date to search from e.g. '2021-01-01' for 1 Jan 2021"
+        start_time_prompt = ">w< bot-chan found your ics file uwu plz gib bot-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
         context.bot.send_message(
             text=start_time_prompt,
             chat_id=userid
@@ -157,18 +159,27 @@ def find(update, context):
         )
         return ConversationHandler.END
 
-#TODO
+def generate_keyboard_from_userlist(userlist, rowsize):
+    keyboard = []
+    rowcnt = 0
+    row = []
+    for user in userlist:
+        if rowcnt < rowsize:
+            row.append(user)
+            rowcnt += 1
+        else:
+            rowcnt = 0
+            keyboard.append(copy.copy(row))
+            row = []
+    if len(row) != 0:
+        keyboard.append(copy.copy(row))
+    keyboard.append(['Done', 'Cancel'])
+
+    return keyboard
+
 def find_persons_to_query(update, context):
     user_selection = update.message.text
-
-    # # Not valid user input
-    # if not user_selection:
-    #     reprompt = "B-b-baka...nani kore is this bot-chan no understando try again plz"
-    #     context.bot.send_message(
-    #         text=reprompt,
-    #         chat_id=update.message.chat_id
-    #     )
-    #     return 1
+    group_id = update.message.chat.id
 
     # User done selecting users
     if user_selection == 'Done':
@@ -180,9 +191,8 @@ def find_persons_to_query(update, context):
         )
         return 2
 
-    # Possibly valid user input i.e. string of form xxx(xxx)
     # Check if username in saved chat_data
-    elif user_selection not in context.chat_data.keys():
+    elif user_selection not in context.chat_data['name_id_map'].keys():
         reprompt = "B-b-baka...nani kore is this bot-chan no understando try again plz"
         context.bot.send_message(
             text=reprompt,
@@ -192,8 +202,36 @@ def find_persons_to_query(update, context):
 
     # Definitely valid user input
     else:
-        # Retrieve user_id from username
-        user_id = context.chat_data.pop(user_selection)
+        # Retrieve user_id from username and remove user from mapping
+        user_id = context.chat_data['name_id_map'].pop(user_selection)
+
+        # Update included ics files
+        ics_str = db.child('group').child(group_id).child(user_id).get().val()
+        context.chat_data['included'].append(ics_str)
+
+        # Generate new keyboard from remaining users
+        users_left = list(context.chat_data['name_id_map'].keys())
+        
+        # Users left
+        if users_left:
+            keyboard = generate_keyboard_from_userlist(users_left, 3)
+            prompt_for_next = "Ara ara~ bot-chan has included {} >w< Tell bot-onee-chan who else you want to include :3".format(user_selection)
+            context.bot.send_message(
+                text=prompt_for_next,
+                chat_id=group_id,
+                reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
+            )
+            return 1
+
+        # No users left
+        else:
+            prompt_for_next = "Ara ara~ Bot-chan sees you've added all your friends already >:) Give bot-onee-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
+            context.bot.send_message(
+                text=prompt_for_next,
+                chat_id=group_id,
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return 2
 
 def cancel_find(update, context):
     cancel_text = "Bot-chan cancelled your request...d-d-don't get me wrong, it's not like I want you to use me again...baka"
@@ -204,23 +242,65 @@ def cancel_find(update, context):
     )
     return ConversationHandler.END
 
-#TODO
 def find_start_time(update, context):
-    pass
+    user_input = update.message.text
+    try:
+        parsed_date = datetime.strptime(user_input, "%d/%m/%Y %H:%M")
+        context.chat_data['params']['start'] = parsed_date
+        prompt_end_time = "Yare yare daze bot-chan has a start time now OwO Gib me owari no toki >w< e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
+        context.bot.send_message(
+            text=prompt_end_time,
+            chat_id=update.message.chat_id
+        )
+        return 3
 
-#TODO
+    except ValueError:
+        error_prompt = "B-b-baka! {} wakaranai desu yo UwU try again kudasai".format(user_input)
+        context.bot.send_message(
+            text=error_prompt,
+            chat_id=update.message.chat_id
+        )
+        return 2
+
 def find_end_time(update, context):
-    pass
+    user_input = update.message.text
+    try:
+        parsed_date = datetime.strptime(user_input, "%d/%m/%Y %H:%M")
+        context.chat_data['params']['end'] = parsed_date
+        prompt_end_time = "Yare yare daze bot-chan has an end time now OwO Tell bot-onee-san how much free time you need >w< e.g. '2' for minimum 2 hour blocks of free time"
+        context.bot.send_message(
+            text=prompt_end_time,
+            chat_id=update.message.chat_id
+        )
+        return 4
 
-#TODO
+    except ValueError:
+        error_prompt = "B-b-baka! {} wakaranai desu yo UwU try again kudasai".format(user_input)
+        context.bot.send_message(
+            text=error_prompt,
+            chat_id=update.message.chat_id
+        )
+        return 3
+
 def find_min_interval(update, context):
-    pass
+    user_input = update.message.text
+    try:
+        parsed_interval = int(user_input)
+        context.chat_data['params']['interval'] = parsed_interval
+        result = str(find_free_time(context.chat_data['included'] ,context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
+        context.bot.send_message(
+            text=result,
+            chat_id=update.message.chat_id
+        )
+        return ConversationHandler.END
+    except ValueError:
+        error_prompt = "Blimey! You must have made a mistake you nimwit! What is {}? Utter bollocks! Try again!"
+        context.bot.send_message(
+            text=error_prompt,
+            chat_id=update.message.chat_id
+        )
+        return 4
 
-#TODO
-def display_result(update, context):
-    pass
-
-#TODO
 def upload(update, context):
     group_id = update.message.chat_id
     user_id = update.message.from_user.id
@@ -237,15 +317,6 @@ def upload(update, context):
 
     # Case for PM
     if is_PM:
-        # # Check if ics file for this user already exists in db
-        # if db.child('private').child(user_id).get().val() != None:
-        #     prompt = "B-b-baka, you have a .ics in me already owo...send 'yes' to overwrite or 'no' to cancel"
-        #     context.bot.send_message(
-        #         text=prompt,
-        #         chat_id=group_id
-        #     )
-        #     return 2
-
         upload_text = "I-it's not like I need your .ics files b-b-baka! Upload your .ics files thenk or use '/cancel' to cancel"
         context.bot.send_message(
             text=upload_text,
@@ -259,7 +330,7 @@ def upload(update, context):
         # Check if ics file for this user already exists in db
         if db.child('group').child(group_id).child(user_id).get().val() != None:
             print('Prompt group overwrite')
-            prompt = "B-b-baka, you have a .ics in me already owo...send 'yes' to overwrite or 'no' to cancel"
+            prompt = "B-b-baka, you have an .ics in me already owo...send 'yes' to overwrite or 'no' to cancel"
             context.bot.send_message(
                 text=prompt,
                 chat_id=group_id
@@ -305,29 +376,7 @@ def upload_not_understood(update, context):
     )
     return 2
 
-#TODO
-def start_not_understood(update, context):
-    pass
-
-#TODO
-def end_not_understood(update, context):
-    pass
-
-#TODO
-def interval_not_understood(update, context):
-    pass
-
-#TODO
-def on_doc_upload(update, context):
-    # # Check if message sent from group. If not, prompt user to add bot to group
-    # if update.message.chat.type != "group" and update.message.chat.type  != "supergroup":
-    #     text = "Add bot-chan to group uwu before upload...baka"
-    #     context.bot.send_message(
-    #         text=text,
-    #         chat_id=update.message.chat_id
-    #     )
-    #     return 1
-    
+def on_doc_upload(update, context):    
     group_id = update.message.chat_id
     user_id = update.message.from_user.id
     doc = update.message.document
@@ -403,10 +452,9 @@ def main():
         entry_points=[CommandHandler('find', find)],
         states={
             1 : [MessageHandler(Filters.regex('(?i)^Cancel$'), cancel_find), MessageHandler(Filters.text, find_persons_to_query)],
-            2 : [MessageHandler(Filters.text, find_start_time), MessageHandler(Filters.text, start_not_understood), CommandHandler("cancel", cancel_find)],
-            3 : [MessageHandler(Filters.text, find_end_time), MessageHandler(Filters.text, end_not_understood), CommandHandler("cancel", cancel_find)],
-            4 : [MessageHandler(Filters.text, find_min_interval), MessageHandler(Filters.text, interval_not_understood), CommandHandler("cancel", cancel_find)],
-            5 : [MessageHandler(Filters.text, display_result)]
+            2 : [MessageHandler(Filters.text, find_start_time), CommandHandler("cancel", cancel_find)],
+            3 : [MessageHandler(Filters.text, find_end_time), CommandHandler("cancel", cancel_find)],
+            4 : [MessageHandler(Filters.text, find_min_interval), CommandHandler("cancel", cancel_find)]
         },
         fallbacks=[CommandHandler('cancel', cancel_find)]
     )
