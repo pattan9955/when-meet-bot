@@ -2,8 +2,8 @@ from datetime import datetime
 import pyrebase
 import os
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, ConversationHandler, MessageHandler, Filters, updater
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, replymarkup
+from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, Filters
 
 from secret_token import DB_TOKEN, TOKEN #local secret.py file
 from findtimes import *
@@ -67,7 +67,7 @@ def clear(update, context):
     remove_text = "Y-y-you removed your data from bot-chan's storage?! I-it's not like I care...baka"
     context.bot.send_message(
         text=remove_text,
-        chat_id=group_id
+        chat_id=user_id if chat_type == 'private' else group_id
     )
 
 def find(update, context):
@@ -247,7 +247,7 @@ def find_start_time(update, context):
     try:
         parsed_date = datetime.strptime(user_input, "%d/%m/%Y %H:%M")
         context.chat_data['params']['start'] = parsed_date
-        prompt_end_time = "Yare yare daze bot-chan has a start time now OwO Gib me owari no toki >w< e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
+        prompt_end_time = "Yare yare daze bot-chan has a start time now OwO Gib me owari no toki >w< e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021\nTo tell bot-chan yamete kudasai, type '/cancel'"
         context.bot.send_message(
             text=prompt_end_time,
             chat_id=update.message.chat_id
@@ -267,7 +267,7 @@ def find_end_time(update, context):
     try:
         parsed_date = datetime.strptime(user_input, "%d/%m/%Y %H:%M")
         context.chat_data['params']['end'] = parsed_date
-        prompt_end_time = "Yare yare daze bot-chan has an end time now OwO Tell bot-onee-san how much free time you need >w< e.g. '2' for minimum 2 hour blocks of free time"
+        prompt_end_time = "Yare yare daze bot-chan has an end time now OwO Tell bot-onee-san how much free time you need >w< e.g. '2' for minimum 2 hour blocks of free time\nBot-chan only supports intervals up to 24 for now UwU\nTo tell bot-chan yamete kudasai, type '/cancel'"
         context.bot.send_message(
             text=prompt_end_time,
             chat_id=update.message.chat_id
@@ -282,19 +282,47 @@ def find_end_time(update, context):
         )
         return 3
 
+def process_result(res_dict):
+    final = ""
+    for day,times in res_dict.items():
+        intermediate = ""
+        intermediate += day
+        intermediate += ':\n'
+
+        for time in times:
+            start = time[0] % 24
+            end = time[1] % 24
+            if start < 10:
+                start = '0{}00'.format(start)
+            else:
+                start = '{}00'.format(start)
+
+            if end < 10:
+                end = '0{}00'.format(end)
+            else:
+                end = '{}00'.format(end)
+            intermediate += '    {}hrs - {}hrs\n'.format(start, end)
+        final += intermediate
+        final += '\n'
+
+    return final
+
 def find_min_interval(update, context):
     user_input = update.message.text
+
     try:
         parsed_interval = int(user_input)
+        if parsed_interval >= 24:
+            raise ValueError
         context.chat_data['params']['interval'] = parsed_interval
-        result = str(find_free_time(context.chat_data['included'] ,context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
+        result = process_result(find_free_time(context.chat_data['included'] ,context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
         context.bot.send_message(
             text=result,
             chat_id=update.message.chat_id
         )
         return ConversationHandler.END
     except ValueError:
-        error_prompt = "Blimey! You must have made a mistake you nimwit! What is {}? Utter bollocks! Try again!"
+        error_prompt = "Blimey! You must have made a mistake you nimwit! What is {}? Utter bollocks! Try again!".format(user_input)
         context.bot.send_message(
             text=error_prompt,
             chat_id=update.message.chat_id
@@ -423,6 +451,14 @@ def on_doc_upload(update, context):
 
     return ConversationHandler.END
 
+def error(update, context):
+    print(context.error)
+    context.bot.send_message(
+        text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
+        chat_id = update.message.chat_id,
+        reply_markup = ReplyKeyboardRemove()
+    )
+
 def main():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher;
@@ -451,14 +487,17 @@ def main():
     query_conv_handler = ConversationHandler(
         entry_points=[CommandHandler('find', find)],
         states={
-            1 : [MessageHandler(Filters.regex('(?i)^Cancel$'), cancel_find), MessageHandler(Filters.text, find_persons_to_query)],
-            2 : [MessageHandler(Filters.text, find_start_time), CommandHandler("cancel", cancel_find)],
-            3 : [MessageHandler(Filters.text, find_end_time), CommandHandler("cancel", cancel_find)],
-            4 : [MessageHandler(Filters.text, find_min_interval), CommandHandler("cancel", cancel_find)]
+            1 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.regex('(?i)^Cancel$'), cancel_find), MessageHandler(Filters.text, find_persons_to_query)],
+            2 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_start_time)],
+            3 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_end_time)],
+            4 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_min_interval)]
         },
         fallbacks=[CommandHandler('cancel', cancel_find)]
     )
     dp.add_handler(query_conv_handler)
+
+    # Add error handler for bot
+    dp.add_error_handler(error)
 
     updater.start_polling()
 
