@@ -30,7 +30,7 @@ def start(update, context):
 def help(update, context):
     chat_type = update.message.chat.type
     help_group = "To use the bot, add bot-chan to a group chat, and have all members use '/upload' to upload their .ics files!\n To query for common free times, use '/find'\nTo clear your uploaded file, use '/clear'...baka :3"
-    help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear all uploaded files, use '/clear'\nTo cancel at any point of time during uploading or querying, use 'cancel'...baka :3"
+    help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear all uploaded files, use '/clear'\nTo cancel at any point of time during uploading or querying, use '/cancel'...baka :3"
     if chat_type == 'private':
         context.bot.send_message(
             text=help_private,
