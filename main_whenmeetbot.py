@@ -30,7 +30,7 @@ def start(update, context):
 def help(update, context):
     chat_type = update.message.chat.type
     help_group = "To use the bot, add bot-chan to a group chat, and have all members use '/upload' to upload their .ics files!\n To query for common free times, use '/find'\nTo clear your uploaded file, use '/clear'...baka :3"
-    help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear all uploaded files, use '/clear'...baka :3"
+    help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear all uploaded files, use '/clear'\nTo cancel at any point of time during uploading or querying, use 'cancel'...baka :3"
     if chat_type == 'private':
         context.bot.send_message(
             text=help_private,
@@ -354,10 +354,10 @@ def upload(update, context):
 
     # Case for group chat
     else:
-        print(db.child('group').child(group_id).child(user_id).get().val())
+        # print(db.child('group').child(group_id).child(user_id).get().val())
         # Check if ics file for this user already exists in db
         if db.child('group').child(group_id).child(user_id).get().val() != None:
-            print('Prompt group overwrite')
+            # print('Prompt group overwrite')
             prompt = "B-b-baka, you have an .ics in me already owo...send 'yes' to overwrite or 'no' to cancel"
             context.bot.send_message(
                 text=prompt,
@@ -428,7 +428,7 @@ def on_doc_upload(update, context):
         else:
             current_len = len(current_len)
         db.child('private').child(user_id).child(current_len).set(content)
-        print('Added private + {}'.format(current_len))
+        # print('Added private + {}'.format(current_len))
 
     else:
         # Write ics file to database if no entry for user present
@@ -452,7 +452,7 @@ def on_doc_upload(update, context):
     return ConversationHandler.END
 
 def error(update, context):
-    print(context.error)
+    # print(context.error)
     context.bot.send_message(
         text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
         chat_id = update.message.chat_id,
