@@ -1,8 +1,9 @@
 import icalendar
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import copy
 from intervaltree import Interval, IntervalTree
 import recurring_ical_events
+from testfiles import *
 
 # class Event():
     # '''
@@ -84,9 +85,23 @@ def new_parse_output_ics(cal_str, start_datetime, end_datetime):
     
     event_list = []
     for event in events:
-        event_list.append([event['DTSTART'].dt, event['DTEND'].dt])
-    
-    return sorted(event_list, key=lambda e : e[0])
+        temp_start = event['DTSTART'].dt
+        temp_end = event['DTEND'].dt
+
+        if isinstance(temp_start, date):
+            temp_start = datetime(temp_start.year, temp_start.month, temp_start.day)
+        if isinstance(temp_end, date):
+            temp_end = datetime(temp_end.year, temp_end.month, temp_end.day)
+            temp_end += timedelta(1)
+
+        if temp_start < start_datetime:
+            temp_start = start_datetime
+        if temp_end > end_datetime:
+            temp_end = end_datetime
+
+        event_list.append([temp_start, temp_end])
+    # print(sorted(event_list, key = lambda e : e[0]))
+    return sorted(event_list, key = lambda e : e[0])
 
 # def parse_output_ics(in_filepath):
     '''
@@ -218,7 +233,7 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
     free_time_dict = {}
     for date in daterange(start_date, end_date + timedelta(days=1)):
         free_time_dict[date] = [True for i in range(24)]
-    
+
     for event in events:
         event_start_date = event[0].date()
         event_end_date = event[1].date()
@@ -277,70 +292,8 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
     # print(final_results)    
 
 if __name__ == '__main__':
-
-    str1 = '''
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//ical.marudot.com//iCal Event Maker
-CALSCALE:GREGORIAN
-BEGIN:VTIMEZONE
-TZID:Asia/Shanghai
-TZURL:http://tzurl.org/zoneinfo-outlook/Asia/Shanghai
-X-LIC-LOCATION:Asia/Shanghai
-BEGIN:STANDARD
-TZOFFSETFROM:+0800
-TZOFFSETTO:+0800
-TZNAME:CST
-DTSTART:19700101T000000
-END:STANDARD
-END:VTIMEZONE
-BEGIN:VEVENT
-DTSTAMP:20210531T134415Z
-UID:20210531T134415Z-689865720@marudot.com
-DTSTART;TZID=Asia/Shanghai:20210531T010000
-DTEND;TZID=Asia/Shanghai:20210531T040000
-SUMMARY:event1
-END:VEVENT
-BEGIN:VEVENT
-DTSTAMP:20210531T134415Z
-UID:20210531T134415Z-805750837@marudot.com
-DTSTART;TZID=Asia/Shanghai:20210531T070000
-DTEND;TZID=Asia/Shanghai:20210531T130000
-SUMMARY:Event 2
-END:VEVENT
-END:VCALENDAR
-    '''
-    str2 = '''BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//il.marudot.com//il Event Maker
-CALSCALE:GRORIAN
-BEGIN:VTIMEZONE
-TZID:Asia/Shanghai
-TZURL:http://tzlrg/zoneinfo-outlook/Asia/Shanghai
-X-LIC-LOCATION:Asia/Shanghai
-BEGIN:STANDARD
-TZOFFSETFROM:+0800
-TZOFFSETTO:+0800
-TZNAME:CST
-DTSTART:19700101T000000
-END:STANDARD
-END:VTIMEZONE
-BEGIN:VEVENT
-DTSTAMP:20210531T134915Z
-UID:20210531T134915Z-400958099@marudot.com
-DTSTART;TZID=Asia/Shanghai:20210531T003000
-DTEND;TZID=Asia/Shanghai:20210531T040000
-SUMMARY:event1
-END:VEVENT
-BEGIN:VEVENT
-DTSTAMP:20210531T134915Z
-UID:20210531T134915Z-2120769269@marudot.com
-DTSTART;TZID=Asia/Shanghai:20210531T060000
-DTEND;TZID=Asia/Shanghai:20210601T010000
-SUMMARY:event2
-END:VEVENT
-END:VCALENDAR'''
-    
-    start = datetime(2021, 5, 31)
-    end = datetime(2021, 6, 1, 0, 0)
-    print(find_free_time([str1, str2], start, end, 1))
+    start = datetime(2021, 6, 18, 0, 0, 0)
+    end = datetime(2021, 8, 18, 0, 0, 0)
+    # print(new_parse_output_ics(fel_str, start, end))
+    # print(find_free_time([fel_str], start, end, 5))
+    print(find_free_time([GAV_STR, FEL_STR], start, end, 22))
