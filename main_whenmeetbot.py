@@ -302,6 +302,9 @@ def process_result(res_dict):
             else:
                 end = '{}00'.format(end)
             intermediate += '    {}hrs - {}hrs\n'.format(start, end)
+        
+        if intermediate == '{}:\n'.format(day):
+            continue
         final += intermediate
         final += '\n'
 
@@ -312,10 +315,10 @@ def find_min_interval(update, context):
 
     try:
         parsed_interval = int(user_input)
-        if parsed_interval >= 24:
+        if parsed_interval > 24:
             raise ValueError
         context.chat_data['params']['interval'] = parsed_interval
-        result = process_result(find_free_time(context.chat_data['included'] ,context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
+        result = process_result(find_free_time(context.chat_data['included'], context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
         context.bot.send_message(
             text=result,
             chat_id=update.message.chat_id
@@ -416,8 +419,9 @@ def on_doc_upload(update, context):
     with open("{}".format(fileid), 'wb') as f:
         context.bot.get_file(doc).download(out = f)
     
-    with open("{}".format(fileid)) as f:
+    with open("{}".format(fileid), encoding="latin-1") as f:
         for line in f:
+            print(line)
             content += line
     os.remove('{}'.format(fileid))
 
@@ -441,8 +445,6 @@ def on_doc_upload(update, context):
             db.child('group').child(group_id).update({user_id : content})
             # print('Updated group')
 
-    
-
     confirmation = "UwU bot-chan has successfully uploaded {}'s file...baka".format(update.message.from_user.username)
     context.bot.send_message(
         text=confirmation,
@@ -452,7 +454,7 @@ def on_doc_upload(update, context):
     return ConversationHandler.END
 
 def error(update, context):
-    # print(context.error)
+    print(context.error)
     context.bot.send_message(
         text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
         chat_id = update.message.chat_id,
