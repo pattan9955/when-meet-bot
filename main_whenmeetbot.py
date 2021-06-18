@@ -105,9 +105,8 @@ def find(update, context):
             final_name = "{} ({})".format(fullname, username)
 
             context.chat_data['name_id_map'][final_name] = userid
-            
-            if rowcnt < 3:
-                row.append(final_name)
+            row.append(final_name)
+            if rowcnt < 2:
                 rowcnt += 1
             else:
                 rowcnt = 0
@@ -164,8 +163,8 @@ def generate_keyboard_from_userlist(userlist, rowsize):
     rowcnt = 0
     row = []
     for user in userlist:
+        row.append(user)
         if rowcnt < rowsize:
-            row.append(user)
             rowcnt += 1
         else:
             rowcnt = 0
@@ -214,7 +213,7 @@ def find_persons_to_query(update, context):
         
         # Users left
         if users_left:
-            keyboard = generate_keyboard_from_userlist(users_left, 3)
+            keyboard = generate_keyboard_from_userlist(users_left, 2)
             prompt_for_next = "Ara ara~ bot-chan has included {} >w< Tell bot-onee-chan who else you want to include :3".format(user_selection)
             context.bot.send_message(
                 text=prompt_for_next,
