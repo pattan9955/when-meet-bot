@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
+from pyasn1.debug import DEBUG_ALL
 import pyrebase
 import os
 
@@ -19,6 +21,9 @@ config = {
 }
 firebase = pyrebase.initialize_app(config)
 db = firebase.database()
+
+# Configure logger
+# logging.basicConfig()
 
 def start(update, context):
     welcome = '''Ohayo minasan! Welcome to WhenMeetBot!\nFor help/tasukete, type '/help'.\nTo upload your .ics file, type '/upload'.\nTo query for common free times, type '/find'.'''
@@ -53,22 +58,139 @@ def cancel_upload(update, context):
 
 def clear(update, context):
     chat_type = update.message.chat.type
+
     if chat_type == 'private':
         user_id = update.message.chat_id
 
-        db.child('private').child(user_id).remove()
+        # db.child('private').child(user_id).remove()
+        files = db.child('private').child(user_id).child('files').get().val()
+        
+        # Case where no files exist
+        if not files:
+            no_file_prompt = 'Aight listen up here son you ain\'t got nothin in me ay'
+            context.bot.send_message(
+                text=no_file_prompt,
+                chat_id=user_id
+            )
+            return ConversationHandler.END
 
+        # Case where files exist
+        else:
+            button_names = []
+            temp = [k for k,v in files.items()]
+            for filename in temp:
+                filedate = db.child('private').child(user_id).child('files').child(filename).child('datecreated').get().val()
+                button_names.append('{} | {}'.format(filename, filedate))
+
+            # Generate keyboard with each filename
+            keyboard = generate_clear_keyboard(button_names, 2)
+
+            prompt = "Click filename to delete file. Click 'Clear All' to clear all. Click 'Done' if you're done .______."
+            context.bot.send_message(
+                text=prompt,
+                chat_id=user_id,
+                reply_markup = ReplyKeyboardMarkup(keyboard=keyboard)
+            )
+            return 68
+            
     else:
         group_id = update.message.chat_id
         user_id = update.message.from_user.id
 
-        db.child('group').child(group_id).child(user_id).remove()
+        db.child('group').child(group_id).child('users').child(user_id).remove()
 
-    remove_text = "Y-y-you removed your data from bot-chan's storage?! I-it's not like I care...baka"
+        remove_text = "Y-y-you removed your data from bot-chan's storage?! I-it's not like I care...baka"
+        context.bot.send_message(
+            text=remove_text,
+            chat_id=user_id if chat_type == 'private' else group_id
+        )
+
+        return ConversationHandler.END
+
+def clear_files(update, context):
+    user_input = update.message.text.split(" | ")[0]
+    userid = update.message.chat_id
+    
+    # Case where files still left
+    temp_filenamelist = db.child('private').child(userid).child('files').get().val()
+    filenamelist = [k for k,v in temp_filenamelist.items()]
+
+    # Check if user wants to clear all
+    if user_input.lower() == 'clear all':
+        db.child('private').child(userid).child('files').remove()
+        context.bot.send_message(
+            text='Everything iz kil',
+            chat_id=userid,
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return ConversationHandler.END
+
+    # Check if user_input is valid
+    elif user_input not in filenamelist:
+        invalid_prompt = "B-b-baka! {} wakaranai desu yo UwU try again kudasai".format(user_input)
+        context.bot.send_message(
+            text=invalid_prompt,
+            chat_id=userid
+        )
+        return 68
+    
+    # For valid user input 
+    else:
+        # Remove file
+        db.child('private').child(userid).child('files').child(user_input).remove()
+        
+        # Check if no files left
+        post_remove_list = db.child('private').child(userid).child('files').get().val()
+        if not post_remove_list:
+            context.bot.send_message(
+                text="Everything iz kil",
+                chat_id=userid,
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return ConversationHandler.END
+
+        button_names = []
+        files = db.child('private').child(userid).child('files').get().val()
+        temp = [k for k,v in files.items()]
+        for filename in temp:
+            filedate = db.child('private').child(userid).child('files').child(filename).child('datecreated').get().val()
+            button_names.append('{} | {}'.format(filename, filedate))
+
+        # Regenerate keyboard
+        keyboard = generate_clear_keyboard(button_names, 2)
+
+        context.bot.send_message(
+            text="{} iz kil\nClick filename to delete file. Click 'Clear All' to clear all. Click 'Done' if you're done .______.".format(user_input),
+            chat_id=userid,
+            reply_markup=ReplyKeyboardMarkup(keyboard)
+        )
+        return 68
+
+def generate_clear_keyboard(filenamelist, rowsize):
+    keyboard = []
+    rowcnt = 0
+    row = []
+    for button in filenamelist:
+        row.append(button)
+        if rowcnt < rowsize:
+            rowcnt += 1
+        else:
+            rowcnt = 0
+            keyboard.append(copy.copy(row))
+            row = []
+    if len(row) != 0:
+        keyboard.append(copy.copy(row))
+    keyboard.append(['Clear All', 'Done'])
+
+    return keyboard
+
+def clear_reprompt(update, context):
+    reprompt_text = 'Plz no torture our bot owo tell bot-chan which file you want to delete....baka >w<'
     context.bot.send_message(
-        text=remove_text,
-        chat_id=user_id if chat_type == 'private' else group_id
+        text=reprompt_text,
+        chat_id=update.message.chat_id
     )
+    return 68
 
 def find(update, context):
     # Check if query done from group or PM with bot
@@ -76,13 +198,14 @@ def find(update, context):
     context.chat_data['included'] = []
     context.chat_data['name_id_map'] = {}
     context.chat_data['params'] = {}
+    context.chat_data['included_filenames'] = []
 
     # Query from group chat
     if chat_type == 'group' or chat_type == 'supergroup':
         group_id = update.message.chat_id
 
         # Get from db a list of all userIDs for the group
-        raw_user_ids = db.child('group').child(group_id).get().val()
+        raw_user_ids = db.child('group').child(group_id).child('users').get().val()
 
         # Check if user_ids is empty
         if not raw_user_ids:
@@ -130,10 +253,16 @@ def find(update, context):
         userid = update.message.chat_id
 
         # Check if entry exists in db
-        data = db.child('private').child(userid).get().val()
+        files = db.child('private').child(userid).child('files').get().val()
+        # print(files)
+        temp_filenames = [k for k,v in files.items()]
         
+        for filename in temp_filenames:
+            filedate = db.child('private').child(userid).child('files').child(filename).child('datecreated').get().val()
+            context.chat_data['included_filenames'].append('{} | {}'.format(filename, filedate))
+
         # If entry doesn't exist
-        if not data:
+        if not context.chat_data['included_filenames']:
             prompt_upload = "OwO bot-chan couldn't find data :( Use '/upload' first uwu....b-b-baka"
             context.bot.send_message(
                 text=prompt_upload,
@@ -141,14 +270,15 @@ def find(update, context):
             )
             return ConversationHandler.END
         
-        context.chat_data['included'].extend(data)
+        keyboard = generate_keyboard_from_userlist(context.chat_data['included_filenames'], 2)
 
-        start_time_prompt = ">w< bot-chan found your ics file uwu plz gib bot-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
+        prompt = "UwU you want to find common free times? Tell bot-chan which files you want to include...baka >w<"
         context.bot.send_message(
-            text=start_time_prompt,
-            chat_id=userid
+            text=prompt,
+            chat_id=update.message.chat_id,
+            reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
         )
-        return 2
+        return 1
 
     # Query through channel
     else:
@@ -179,58 +309,115 @@ def generate_keyboard_from_userlist(userlist, rowsize):
 def find_persons_to_query(update, context):
     user_selection = update.message.text
     group_id = update.message.chat.id
+    chat_type = update.message.chat.type
 
-    # User done selecting users
-    if user_selection == 'Done':
-        prompt_time = "Oki uwu now plz gib bot-chan a start date to search from e.g. '2021-01-01' for 1 Jan 2021"
-        context.bot.send_message(
-            text=prompt_time,
-            chat_id=update.message.chat_id,
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return 2
-
-    # Check if username in saved chat_data
-    elif user_selection not in context.chat_data['name_id_map'].keys():
-        reprompt = "B-b-baka...nani kore is this bot-chan no understando try again plz"
-        context.bot.send_message(
-            text=reprompt,
-            chat_id=update.message.chat_id
-        )
-        return 1
-
-    # Definitely valid user input
-    else:
-        # Retrieve user_id from username and remove user from mapping
-        user_id = context.chat_data['name_id_map'].pop(user_selection)
-
-        # Update included ics files
-        ics_str = db.child('group').child(group_id).child(user_id).get().val()
-        context.chat_data['included'].append(ics_str)
-
-        # Generate new keyboard from remaining users
-        users_left = list(context.chat_data['name_id_map'].keys())
-        
-        # Users left
-        if users_left:
-            keyboard = generate_keyboard_from_userlist(users_left, 2)
-            prompt_for_next = "Ara ara~ bot-chan has included {} >w< Tell bot-onee-chan who else you want to include :3".format(user_selection)
+    if chat_type == 'private':
+        # User done selecting files
+        if user_selection == 'Done':
+            prompt_time = "Oki uwu now plz gib bot-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
             context.bot.send_message(
-                text=prompt_for_next,
-                chat_id=group_id,
-                reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
-            )
-            return 1
-
-        # No users left
-        else:
-            prompt_for_next = "Ara ara~ Bot-chan sees you've added all your friends already >:) Give bot-onee-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
-            context.bot.send_message(
-                text=prompt_for_next,
-                chat_id=group_id,
+                text=prompt_time,
+                chat_id=update.message.chat_id,
                 reply_markup=ReplyKeyboardRemove()
             )
             return 2
+
+        # Check if user input in saved chat_data
+        elif user_selection not in context.chat_data['included_filenames']:
+            reprompt = "B-b-baka...nani kore is this bot-chan no understando try again plz"
+            context.bot.send_message(
+                text=reprompt,
+                chat_id=update.message.chat_id
+            )
+            return 1
+
+        # Valid user input
+        else:
+            # Parse user input for file name
+            filename = user_selection.split(' | ')[0]
+
+            # Pop user_selection from chat_data
+            context.chat_data['included_filenames'].remove(user_selection)
+
+            # Add icalrep for given filename to included
+            icalrep = db.child('private').child(group_id).child('files').child(filename).child('icalrep').get().val()
+            context.chat_data['included'].append(icalrep)
+
+            # Check if files left
+            files_left = context.chat_data['included_filenames']
+
+            if files_left:
+                keyboard = generate_keyboard_from_userlist(files_left, 2)
+                prompt_for_next = "Ara ara~ bot-chan has included {} >w< Tell bot-onee-chan what else you want to include :3".format(user_selection)
+                context.bot.send_message(
+                    text=prompt_for_next,
+                    chat_id=group_id,
+                    reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
+                )
+                return 1
+
+            # No users left
+            else:
+                prompt_for_next = "Ara ara~ Bot-chan sees you've added all your files already >:) Give bot-onee-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
+                context.bot.send_message(
+                    text=prompt_for_next,
+                    chat_id=group_id,
+                    reply_markup=ReplyKeyboardRemove()
+                )
+                return 2
+
+    else:
+        # User done selecting users
+        if user_selection == 'Done':
+            prompt_time = "Oki uwu now plz gib bot-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
+            context.bot.send_message(
+                text=prompt_time,
+                chat_id=update.message.chat_id,
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return 2
+
+        # Check if username in saved chat_data
+        elif user_selection not in context.chat_data['name_id_map'].keys():
+            reprompt = "B-b-baka...nani kore is this bot-chan no understando try again plz"
+            context.bot.send_message(
+                text=reprompt,
+                chat_id=update.message.chat_id
+            )
+            return 1
+
+        # Definitely valid user input
+        else:
+            # Retrieve user_id from username and remove user from mapping
+            user_id = context.chat_data['name_id_map'].pop(user_selection)
+
+            # Update included ics files
+            ics_str = db.child('group').child(group_id).child('users').child(user_id).child('icalrep').get().val()
+            context.chat_data['included'].append(ics_str)
+
+            # Generate new keyboard from remaining users
+            users_left = list(context.chat_data['name_id_map'].keys())
+            
+            # Users left
+            if users_left:
+                keyboard = generate_keyboard_from_userlist(users_left, 2)
+                prompt_for_next = "Ara ara~ bot-chan has included {} >w< Tell bot-onee-chan who else you want to include :3".format(user_selection)
+                context.bot.send_message(
+                    text=prompt_for_next,
+                    chat_id=group_id,
+                    reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
+                )
+                return 1
+
+            # No users left
+            else:
+                prompt_for_next = "Ara ara~ Bot-chan sees you've added all your friends already >:) Give bot-onee-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
+                context.bot.send_message(
+                    text=prompt_for_next,
+                    chat_id=group_id,
+                    reply_markup=ReplyKeyboardRemove()
+                )
+                return 2
 
 def cancel_find(update, context):
     cancel_text = "Bot-chan cancelled your request...d-d-don't get me wrong, it's not like I want you to use me again...baka"
@@ -358,9 +545,10 @@ def upload(update, context):
     else:
         # print(db.child('group').child(group_id).child(user_id).get().val())
         # Check if ics file for this user already exists in db
-        if db.child('group').child(group_id).child(user_id).get().val() != None:
+        if db.child('group').child(group_id).child('users').child(user_id).child('icalrep').get().val() != None:
             # print('Prompt group overwrite')
-            prompt = "B-b-baka, you have an .ics in me already owo...send 'yes' to overwrite or 'no' to cancel"
+            date = db.child('group').child(group_id).child('users').child(user_id).child('dateupdated').get().val()
+            prompt = "B-b-baka, you have an .ics in me already uploaded on {}...send 'yes' to overwrite or 'no' to cancel".format(date)
             context.bot.send_message(
                 text=prompt,
                 chat_id=group_id
@@ -411,6 +599,8 @@ def on_doc_upload(update, context):
     user_id = update.message.from_user.id
     doc = update.message.document
     fileid = update.message.document.file_id
+    filename = update.message.document.file_name.replace('.', '_')
+    chat_dt = str(aslocaltimestr(update.message.date))
     is_PM = True if update.message.chat.type == 'private' else False
     content = ""
 
@@ -420,29 +610,14 @@ def on_doc_upload(update, context):
     
     with open("{}".format(fileid), encoding="latin-1") as f:
         for line in f:
-            print(line)
             content += line
     os.remove('{}'.format(fileid))
 
     if is_PM:
-        current_len = db.child('private').child(user_id).get().val()
-        if not current_len:
-            current_len = 0
-        else:
-            current_len = len(current_len)
-        db.child('private').child(user_id).child(current_len).set(content)
-        # print('Added private + {}'.format(current_len))
+        db.child('private').child(user_id).child('files').update({filename:{'icalrep':content, 'datecreated':chat_dt}})
 
     else:
-        # Write ics file to database if no entry for user present
-        if db.child('group').child(group_id).child(user_id).get().val() == None:
-            db.child('group').child(group_id).child(user_id).set(content)
-            # print('Added group')
-
-        # Otherwise update the file if entry for user already present
-        else:
-            db.child('group').child(group_id).update({user_id : content})
-            # print('Updated group')
+        db.child('group').child(group_id).child('users').child(user_id).update({'icalrep':content, 'dateupdated':chat_dt})
 
     confirmation = "UwU bot-chan has successfully uploaded {}'s file...baka".format(update.message.from_user.username)
     context.bot.send_message(
@@ -460,6 +635,9 @@ def error(update, context):
         reply_markup = ReplyKeyboardRemove()
     )
 
+def aslocaltimestr(utc_dt):
+    return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime('%Y/%m/%d %H:%M')
+
 def main():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher;
@@ -471,7 +649,14 @@ def main():
     dp.add_handler(CommandHandler('help', help))
 
     # Add command handler for clear
-    dp.add_handler(CommandHandler('clear', clear))
+    delete_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('clear', clear)],
+        states={
+            68 : [MessageHandler(Filters.regex('(?i)^Done$'), cancel_find), CommandHandler('cancel', cancel_find), MessageHandler(Filters.text, clear_files)]
+        },
+        fallbacks=[MessageHandler(~Filters.text, clear_reprompt), CommandHandler('cancel', cancel_find)]
+    )
+    dp.add_handler(delete_conv_handler)
 
     # Add conversation handler for uploading document
     upload_conv_handler = ConversationHandler(
