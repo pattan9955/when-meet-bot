@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 import logging
-from pyasn1.debug import DEBUG_ALL
 import pyrebase
 import os
 
@@ -45,6 +44,71 @@ def help(update, context):
     else:
         context.bot.send_message(
             text=help_group,
+            chat_id=update.message.chat_id
+        )
+
+def view(update, context):
+    chat_type = update.message.chat.type
+    
+    # If command called in PM
+    if chat_type == 'private':
+        userid = update.message.chat_id
+        files = db.child('private').child(userid).child('files').get().val()
+
+        # Check if files are empty
+        if not files:
+            msg = 'B-b-baka you have nothing inside me now >:( UwU'
+            context.bot.send_message(
+                text=msg,
+                chat_id=userid
+            )
+        
+        # When files are not empty
+        res = ""
+        for k,v in files.items():
+            currentfile = "{} | {}\n".format(k, v['datecreated'])
+            res += currentfile
+        
+        # Display result
+        context.bot.send_message(
+            text="UwU you currently have these in me:\n{}".format(res),
+            chat_id=userid
+        )
+
+    # Case for group
+    elif chat_type == 'group' or chat_type  == 'supergroup':
+        groupid = update.message.chat_id
+
+        files = db.child('group').child(groupid).child('users').get().val()
+
+        # Deal with case where no one has uploads
+        if not files:
+            msg = 'B-b-baka you have nothing inside me now >:( UwU'
+            context.bot.send_message(
+                text=msg,
+                chat_id=groupid
+            )
+
+        # Case with files
+        res = ""
+        for userid, entry in files.items():
+            username = update.message.chat.get_member(userid).user.username
+            fullname = update.message.chat.get_member(userid).user.full_name
+            date_updated = entry['dateupdated']
+            final_entry = "{} ({}) | Updated: {}\n".format(fullname, username, date_updated)
+            res += final_entry
+        
+        # Display result
+        context.bot.send_message(
+            text="UwU you currently have these in me:\n{}".format(res),
+            chat_id=groupid
+        )
+
+    # Dealing with channel    
+    else:
+        msg = 'Gomenasorry bot-chan no work with channel OwO'
+        context.bot.send_message(
+            text=msg,
             chat_id=update.message.chat_id
         )
 
@@ -681,6 +745,9 @@ def main():
         fallbacks=[CommandHandler('cancel', cancel_find)]
     )
     dp.add_handler(query_conv_handler)
+
+    # Add command handler for view
+    dp.add_handler(CommandHandler('view', view))
 
     # Add error handler for bot
     dp.add_error_handler(error)
