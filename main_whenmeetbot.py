@@ -34,7 +34,7 @@ def start(update, context):
 def help(update, context):
     chat_type = update.message.chat.type
     help_group = "To use the bot, add bot-chan to a group chat, and have all members use '/upload' to upload their .ics files!\n To query for common free times, use '/find'\nTo clear your uploaded file, use '/clear'...baka :3"
-    help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear all uploaded files, use '/clear'\nTo cancel at any point of time during uploading or querying, use '/cancel'...baka :3"
+    help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear uploaded files, use '/clear'\nTo cancel at any point of time during uploading or querying, use '/cancel'...baka :3"
     if chat_type == 'private':
         context.bot.send_message(
             text=help_private,
@@ -569,6 +569,7 @@ def find_min_interval(update, context):
             raise ValueError
         context.chat_data['params']['interval'] = parsed_interval
         result = process_result(find_free_time(context.chat_data['included'], context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
+        result = "No free time :'(" if (result == "") else result
         context.bot.send_message(
             text=result,
             chat_id=update.message.chat_id
@@ -750,7 +751,7 @@ def main():
     dp.add_handler(CommandHandler('view', view))
 
     # Add error handler for bot
-    dp.add_error_handler(error)
+    # dp.add_error_handler(error)
 
     updater.start_polling()
 
