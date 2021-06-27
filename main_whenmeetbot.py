@@ -13,6 +13,7 @@ from findtimes import *
 # For deployment
 DB_TOKEN = os.environ.get("DB_TOKEN")
 TOKEN = os.environ.get("TOKEN")
+PORT = os.getenv('PORT', default=8000)
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
@@ -758,7 +759,8 @@ def main():
     # Add error handler for bot
     dp.add_error_handler(error)
 
-    updater.start_polling()
+    # updater.start_polling()
+    updater.start_webhook(port=PORT)
 
 if __name__ == '__main__':
     main()
