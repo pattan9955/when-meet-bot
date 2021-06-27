@@ -1,13 +1,18 @@
 from datetime import datetime, timezone
-import logging
+# import logging
+# from secret_token import TOKEN
 import pyrebase
 import os
 
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, replymarkup
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, Filters
 
-from secret_token import DB_TOKEN, TOKEN #local secret.py file
+# from secret_token import DB_TOKEN, TOKEN #local secret.py file
 from findtimes import *
+
+# For deployment
+DB_TOKEN = os.environ.get("DB_TOKEN")
+TOKEN = os.environ.get("TOKEN")
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
@@ -565,7 +570,7 @@ def find_min_interval(update, context):
 
     try:
         parsed_interval = int(user_input)
-        if parsed_interval > 24:
+        if parsed_interval > 24 or parsed_interval <= 0:
             raise ValueError
         context.chat_data['params']['interval'] = parsed_interval
         result = process_result(find_free_time(context.chat_data['included'], context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
@@ -751,7 +756,7 @@ def main():
     dp.add_handler(CommandHandler('view', view))
 
     # Add error handler for bot
-    # dp.add_error_handler(error)
+    dp.add_error_handler(error)
 
     updater.start_polling()
 
