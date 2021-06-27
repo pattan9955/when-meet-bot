@@ -1,1 +1,1 @@
-web: python main_whenmeetbot.py
+worker: python3 main_whenmeetbot.py
