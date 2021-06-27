@@ -39,7 +39,7 @@ We hope to bypass the cumbersome process of planning and coordinating for groups
 
 ## Program Flow:
 
-![README/photo_2021-06-24_04-17-37.jpg](README/photo_2021-06-24_04-17-37.jpg)
+![README/program_flow.jpg](README/program_flow.jpg)
 
 ---
 
@@ -140,27 +140,27 @@ The Telegram bot has been prepared with a connection to the Firebase Realtime Da
 
 - `/start` → Introductory message to users
 
-    [https://lh4.googleusercontent.com/EV6-CKzQjuQsFdk4LYjtQ_3Ffp-5x6CEGDgaz-qKG03AgsWN-IPxeoeZwPMd43XGtdFeNyibBf8dVwiPWpHaxbhpk-JCgEOsJR99rNNTdAlxiwisFGX7yoTjtVnlkAr7EvcN8HyM](https://lh4.googleusercontent.com/EV6-CKzQjuQsFdk4LYjtQ_3Ffp-5x6CEGDgaz-qKG03AgsWN-IPxeoeZwPMd43XGtdFeNyibBf8dVwiPWpHaxbhpk-JCgEOsJR99rNNTdAlxiwisFGX7yoTjtVnlkAr7EvcN8HyM)
+    ![README/start.png](README/start.png)
 
 - `/help` → Pops out a help menu for the basic features of the bot
 
-    [https://lh5.googleusercontent.com/T1XZtvH4WpRC3lhcMjBn-cHa_eYHkOzGt1S_qsrNfO9k1sqF-16KlsxQ1Lg-S5FzbdjzGQHvWpI9rlHyBILSlbXzWk2D-nCDmY5NIYazRPSI4x_k5mqzw0e4iTdjPzFQf3KLRGbc](https://lh5.googleusercontent.com/T1XZtvH4WpRC3lhcMjBn-cHa_eYHkOzGt1S_qsrNfO9k1sqF-16KlsxQ1Lg-S5FzbdjzGQHvWpI9rlHyBILSlbXzWk2D-nCDmY5NIYazRPSI4x_k5mqzw0e4iTdjPzFQf3KLRGbc)
+    ![README/help.png](README/help.png)
 
 - `/upload` → upload a new .ics file
 
-    [https://lh4.googleusercontent.com/4p734xwRk9FV65gX71fTdICxWOUknG-bPjBjYpqIkYY98erqrOaLHsFpeKavx_kS7Q8WlR6hJ2Gril-AoPyVamOUJD6XQP6uoTTmUbFPwZUXMAJb_2osPel6fHhxllZomVRzyysY](https://lh4.googleusercontent.com/4p734xwRk9FV65gX71fTdICxWOUknG-bPjBjYpqIkYY98erqrOaLHsFpeKavx_kS7Q8WlR6hJ2Gril-AoPyVamOUJD6XQP6uoTTmUbFPwZUXMAJb_2osPel6fHhxllZomVRzyysY)
+    ![README/upload.png](README/upload.png)
 
 - `/clear` → removes all data the specific user has uploaded
 
-    [https://lh5.googleusercontent.com/71ojOHqE6mNzGCad_WvpbNaRweP6oWoLB7wP5_Yu9FJIXgBf1wQyuULLR3Ya6NtyvQm57iB-XZ9LzgIhTDwQRJlwIme2rb1CgSngsoZRkHgneFBfML7KkiRZJSxT9puVFGTT-H5w](https://lh5.googleusercontent.com/71ojOHqE6mNzGCad_WvpbNaRweP6oWoLB7wP5_Yu9FJIXgBf1wQyuULLR3Ya6NtyvQm57iB-XZ9LzgIhTDwQRJlwIme2rb1CgSngsoZRkHgneFBfML7KkiRZJSxT9puVFGTT-H5w)
+    ![README/clear.png](README/clear.png)
 
 - `/find` → performs the query based on user-defined parameters
 
-    [https://lh5.googleusercontent.com/kT140O5ECckmlkz1hWt2g3S5PYAfmKDkYuWrNgOoZN-nyaNdblUdDUKOXwz0qDFCeHSLxVhNGvoUwR9MsGeRxfUQdN8uPDz2OaUklW2FAaXhuFWoa4PBXXYIY1lx8NbvmptayQAs](https://lh5.googleusercontent.com/kT140O5ECckmlkz1hWt2g3S5PYAfmKDkYuWrNgOoZN-nyaNdblUdDUKOXwz0qDFCeHSLxVhNGvoUwR9MsGeRxfUQdN8uPDz2OaUklW2FAaXhuFWoa4PBXXYIY1lx8NbvmptayQAs)
+    ![README/find.png](README/find.png)
 
 - `/cancel` → Exits at any time during uploading or querying
 
-    [https://lh4.googleusercontent.com/fwijzxfaocZUFQW2lreEi8JpmTl02GyydL6-A_kqPbgNZGuu5UiKkf55i62DHb56n0RoZQkagJy1kHzYucqEinA___mzRpa8A9FQCBkRQdA6T7xMcUz0Xvh_dh4bua7hIRh41NFX](https://lh4.googleusercontent.com/fwijzxfaocZUFQW2lreEi8JpmTl02GyydL6-A_kqPbgNZGuu5UiKkf55i62DHb56n0RoZQkagJy1kHzYucqEinA___mzRpa8A9FQCBkRQdA6T7xMcUz0Xvh_dh4bua7hIRh41NFX)
+    ![README/cancel.png](README/cancel.png)
 
 - `/view` → Lists all the files the user has uploaded along with date and time.
     - Group
