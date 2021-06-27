@@ -13,7 +13,7 @@ from findtimes import *
 # For deployment
 DB_TOKEN = os.environ.get("DB_TOKEN")
 TOKEN = os.environ.get("TOKEN")
-PORT = os.getenv('PORT', default=8000)
+PORT = os.getenv('PORT', default=88)
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
