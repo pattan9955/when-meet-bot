@@ -1,9 +1,10 @@
 import icalendar
 from datetime import datetime, timedelta, date
 import copy
-from intervaltree import Interval, IntervalTree
+# from intervaltree import Interval, IntervalTree
 import recurring_ical_events
-from testfiles import *
+import pytz
+# from testfiles import *
 
 # class Event():
     # '''
@@ -80,19 +81,29 @@ def new_parse_output_ics(cal_str, start_datetime, end_datetime):
     
     fcal = icalendar.Calendar.from_ical(cal_str)
     
+    # Define timezone object for SG timing
+    sgt = pytz.timezone('Asia/Singapore')
+   
     # Unfolds all events (Including recurring events) between start and end datetime
     events = recurring_ical_events.of(fcal).between(start_datetime, end_datetime)
     
+    start_datetime = sgt.localize(start_datetime)
+    end_datetime = sgt.localize(end_datetime)    
+
     event_list = []
     for event in events:
         temp_start = event['DTSTART'].dt
         temp_end = event['DTEND'].dt
 
-        if isinstance(temp_start, date):
+        if isinstance(temp_start, date) and not isinstance(temp_start, datetime):
             temp_start = datetime(temp_start.year, temp_start.month, temp_start.day)
-        if isinstance(temp_end, date):
+        if isinstance(temp_end, date) and not isinstance(temp_end, datetime):
             temp_end = datetime(temp_end.year, temp_end.month, temp_end.day)
             temp_end += timedelta(1)
+
+        # Convert event start and end times to SG timing
+        temp_start = temp_start.astimezone(sgt)
+        temp_end = temp_end.astimezone(sgt)
 
         if temp_start < start_datetime:
             temp_start = start_datetime
@@ -219,7 +230,7 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
             in order to be considered a valid block of free time.
     '''
     events = new_parse_output_ics(merge_ics(input_ics_strs) , start_datetime, end_datetime)
-    
+    # print(events)
     # Check for case where end_datetime less than start_datetime
     try:
         if end_datetime <= start_datetime:
@@ -238,8 +249,9 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
         event_start_date = event[0].date()
         event_end_date = event[1].date()
         event_start_time = event[0].time().hour
-        cond = event[1].time().minute > 0 or event[1].time().second > 0 or event[1].time().microsecond > 0
-        event_end_time = (event[1].time().hour + 1) if (cond) else event[1].time().hour
+        # cond = event[1].time().minute > 0 or event[1].time().second > 0 or event[1].time().microsecond > 0
+        # event_end_time = (event[1].time().hour + 1) if (cond) else event[1].time().hour
+        event_end_time = event[1].time().hour 
 
         # Case 1: Start and end date are the same
         if (event_start_date == event_end_date):
@@ -292,8 +304,8 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
     # print(final_results)    
 
 if __name__ == '__main__':
-    start = datetime(2021, 6, 18, 0, 0, 0)
-    end = datetime(2021, 8, 18, 0, 0, 0)
+    start = datetime(2021, 5, 29, 0, 0, 0)
+    end = datetime(2021, 6, 3, 0, 0, 0)
     # print(new_parse_output_ics(fel_str, start, end))
     # print(find_free_time([fel_str], start, end, 5))
-    print(find_free_time([GAV_STR, FEL_STR], start, end, 22))
+    # print(find_free_time([FEL_STR, TEST_1_STR], start, end, 1))
