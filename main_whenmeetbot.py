@@ -6,7 +6,7 @@ from telegram.inline.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, Filters
 
 # For testing purposes
-from secret_token import TEST_TOKEN, DB_TOKEN
+# from secret_token import TEST_TOKEN, DB_TOKEN
 
 import pyrebase
 import os
@@ -33,12 +33,12 @@ from findtimes import *
 ) = map(chr, range(14))
 
 # For deployment
-# DB_TOKEN = os.environ.get("DB_TOKEN")
-# TOKEN = os.environ.get("TOKEN")
+DB_TOKEN = os.environ.get("DB_TOKEN")
+TOKEN = os.environ.get("TOKEN")
 # PORT = os.getenv('PORT', default=88)
 
 # For testing
-TOKEN = TEST_TOKEN
+# TOKEN = TEST_TOKEN
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
@@ -802,8 +802,7 @@ def error(update, context):
     print(context.error)
     context.bot.send_message(
         text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
-        chat_id = update.message.chat_id,
-        reply_markup = ReplyKeyboardRemove()
+        chat_id = update.message.chat_id
     )
 
 def aslocaltimestr(utc_dt):
@@ -877,7 +876,6 @@ def main():
         fallbacks=[]
     )
     dp.add_handler(interact_conv_handler)
-    # Add command handler for view
 
     # Add error handler for bot
     dp.add_error_handler(error)
