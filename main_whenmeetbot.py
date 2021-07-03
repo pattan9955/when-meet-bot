@@ -1,19 +1,44 @@
 from datetime import datetime, timezone
-# import logging
-# from secret_token import TOKEN
+from telegram.ext.callbackqueryhandler import CallbackQueryHandler
+
+from telegram.inline.inlinekeyboardbutton import InlineKeyboardButton
+from telegram.inline.inlinekeyboardmarkup import InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, Filters
+
+# For testing purposes
+from secret_token import TEST_TOKEN, DB_TOKEN
+
 import pyrebase
 import os
 
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, Filters
-
 # from secret_token import DB_TOKEN, TOKEN #local secret.py file
-from findtimes import *
+from findtimes import *    
+
+# Constants for bot
+(
+    HELP,
+    CLEAR,
+    CLEAR_FILES,
+    FIND,
+    VIEW,
+    UPLOAD,
+    ON_DOC_UPLOAD,
+    ASK_CONFIRMATION,
+    SELECTION,
+    FIND_PERSONS,
+    FIND_START,
+    FIND_END,
+    FIND_INT,
+    END
+) = map(chr, range(14))
 
 # For deployment
-DB_TOKEN = os.environ.get("DB_TOKEN")
-TOKEN = os.environ.get("TOKEN")
-PORT = os.getenv('PORT', default=88)
+# DB_TOKEN = os.environ.get("DB_TOKEN")
+# TOKEN = os.environ.get("TOKEN")
+# PORT = os.getenv('PORT', default=88)
+
+# For testing
+TOKEN = TEST_TOKEN
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
@@ -31,43 +56,69 @@ db = firebase.database()
 # logging.basicConfig()
 
 def start(update, context):
-    welcome = '''Ohayo minasan! Welcome to WhenMeetBot!\nFor help/tasukete, type '/help'.\nTo upload your .ics file, type '/upload'.\nTo query for common free times, type '/find'.'''
+    buttons = [
+        [
+            InlineKeyboardButton(text='Help', callback_data=str(HELP)), 
+            InlineKeyboardButton(text='View', callback_data=str(VIEW)), 
+            InlineKeyboardButton(text='Upload', callback_data=str(UPLOAD))
+        ],
+        [
+            InlineKeyboardButton(text='Find', callback_data=str(FIND)), 
+            InlineKeyboardButton(text='Clear', callback_data=str(CLEAR)),
+            InlineKeyboardButton(text='Cancel', callback_data=str(END))
+        ]
+    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+    
     context.bot.send_message(
-        text=welcome,
-        chat_id=update.message.chat_id
+        text='Please choose an option!',
+        chat_id=update.message.chat_id,
+        reply_markup=keyboard
     )
+    return SELECTION
+
+def end(update, context):
+    query = update.callback_query
+
+    query.answer()
+
+    query.edit_message_text(
+        text='Bye! Use /start to interact with me again :)'
+    )
+    return END
 
 def help(update, context):
-    chat_type = update.message.chat.type
+    query = update.callback_query
+    chat_type = query.message.chat.type
+
     help_group = "To use the bot, add bot-chan to a group chat, and have all members use '/upload' to upload their .ics files!\n To query for common free times, use '/find'\nTo clear your uploaded file, use '/clear'...baka :3"
     help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear uploaded files, use '/clear'\nTo cancel at any point of time during uploading or querying, use '/cancel'...baka :3"
+    
+    query.answer()
+
     if chat_type == 'private':
-        context.bot.send_message(
-            text=help_private,
-            chat_id=update.message.chat_id
-        )
+        query.edit_message_text(text=help_private)
 
     else:
-        context.bot.send_message(
-            text=help_group,
-            chat_id=update.message.chat_id
-        )
+        query.edit_message_text(text=help_group)
+    
+    return ConversationHandler.END
 
 def view(update, context):
-    chat_type = update.message.chat.type
-    
+    print('view')
+    query = update.callback_query
+    chat_type = query.message.chat.type
+    query.answer()
     # If command called in PM
     if chat_type == 'private':
-        userid = update.message.chat_id
+        userid = query.message.chat_id
         files = db.child('private').child(userid).child('files').get().val()
 
         # Check if files are empty
         if not files:
-            msg = 'B-b-baka you have nothing inside me now >:( UwU'
-            context.bot.send_message(
-                text=msg,
-                chat_id=userid
-            )
+            msg = 'There are currently no files stored with me. Please use /start -> Upload to upload a file.'
+            query.edit_message_text(text=msg)
+            return ConversationHandler.END
         
         # When files are not empty
         res = ""
@@ -76,73 +127,76 @@ def view(update, context):
             res += currentfile
         
         # Display result
-        context.bot.send_message(
-            text="UwU you currently have these in me:\n{}".format(res),
-            chat_id=userid
+        query.edit_message_text(
+            text="You currently have these with me:\n{}".format(res)
         )
 
     # Case for group
     elif chat_type == 'group' or chat_type  == 'supergroup':
-        groupid = update.message.chat_id
+        groupid = query.message.chat_id
 
         files = db.child('group').child(groupid).child('users').get().val()
 
         # Deal with case where no one has uploads
         if not files:
-            msg = 'B-b-baka you have nothing inside me now >:( UwU'
-            context.bot.send_message(
-                text=msg,
-                chat_id=groupid
-            )
+            msg = 'There are currently no files stored with me. Please use /start -> Upload to upload a file.'
+            query.edit_message_text(text=msg)
 
         # Case with files
         res = ""
         for userid, entry in files.items():
-            username = update.message.chat.get_member(userid).user.username
-            fullname = update.message.chat.get_member(userid).user.full_name
+            username = query.message.chat.get_member(userid).user.username
+            fullname = query.message.chat.get_member(userid).user.full_name
             date_updated = entry['dateupdated']
             final_entry = "{} ({}) | Updated: {}\n".format(fullname, username, date_updated)
             res += final_entry
-        
-        # Display result
-        context.bot.send_message(
-            text="UwU you currently have these in me:\n{}".format(res),
-            chat_id=groupid
+
+        query.edit_message_text(
+            text="You currently have these with me:\n{}".format(res)
         )
 
     # Dealing with channel    
     else:
-        msg = 'Gomenasorry bot-chan no work with channel OwO'
-        context.bot.send_message(
-            text=msg,
-            chat_id=update.message.chat_id
+        msg = 'Channels are currently not supported :('
+        query.edit_message_text(
+            text=msg
         )
+    return ConversationHandler.END
 
 def cancel_upload(update, context):
-    text = 'upload iz kil'
+    print('cancel_upload')
+    text = 'Upload cancelled. Use /start to interact with me again :)'
     context.bot.send_message(
         text=text,
         chat_id=update.message.chat_id
     )
-    return ConversationHandler.END
+    return END
 
 def clear(update, context):
-    chat_type = update.message.chat.type
-
+    print('clear')
+    query = update.callback_query
+    chat_type = query.message.chat.type
+    query.answer()
+    print(update) 
+    print('\n\n')
     if chat_type == 'private':
-        user_id = update.message.chat_id
+        user_id = query.from_user.id
+        print('user_id: {}'.format(user_id))
 
         # db.child('private').child(user_id).remove()
         files = db.child('private').child(user_id).child('files').get().val()
         
         # Case where no files exist
         if not files:
-            no_file_prompt = 'Aight listen up here son you ain\'t got nothin in me ay'
-            context.bot.send_message(
-                text=no_file_prompt,
-                chat_id=user_id
+            no_file_prompt = 'No data found :( Use /start to interact with the bot again :)'
+            query.edit_message_text(
+                text=no_file_prompt
             )
-            return ConversationHandler.END
+            # context.bot.send_message(
+            #     text=no_file_prompt,
+            #     chat_id=user_id
+            # )
+            return END
 
         # Case where files exist
         else:
@@ -155,54 +209,57 @@ def clear(update, context):
             # Generate keyboard with each filename
             keyboard = generate_clear_keyboard(button_names, 2)
 
-            prompt = "Click filename to delete file. Click 'Clear All' to clear all. Click 'Done' if you're done .______."
-            context.bot.send_message(
+            prompt = "Click filename to delete file. Click 'Clear All' to clear all files. Click 'Done' if you're done."
+            query.edit_message_text(
                 text=prompt,
-                chat_id=user_id,
-                reply_markup = ReplyKeyboardMarkup(keyboard=keyboard)
+                reply_markup=keyboard
             )
-            return 68
+            # context.bot.send_message(
+            #     text=prompt,
+            #     chat_id=user_id,
+            #     reply_markup = keyboard
+            # )
+            return CLEAR_FILES
             
     else:
-        group_id = update.message.chat_id
-        user_id = update.message.from_user.id
+        group_id = query.message.chat_id
+        user_id = query.from_user.id
+        print('groupid: {}'.format(group_id))
+        print('userid: {}'.format(user_id))
 
         db.child('group').child(group_id).child('users').child(user_id).remove()
 
-        remove_text = "Y-y-you removed your data from bot-chan's storage?! I-it's not like I care...baka"
-        context.bot.send_message(
-            text=remove_text,
-            chat_id=user_id if chat_type == 'private' else group_id
+        remove_text = "I have removed your data from my storage. Use /start to interact with me again :)"
+        query.edit_message_text(
+            text=remove_text
         )
+        # context.bot.send_message(
+        #     text=remove_text,
+        #     chat_id=user_id if chat_type == 'private' else group_id
+        # )
 
-        return ConversationHandler.END
+        return END
 
 def clear_files(update, context):
-    user_input = update.message.text.split(" | ")[0]
-    userid = update.message.chat_id
+    print('clear_files')
+    query = update.callback_query
+    user_input = query.data.split(" | ")[0]
+    userid = query.message.chat_id
+    query.answer()
     
     # Case where files still left
     temp_filenamelist = db.child('private').child(userid).child('files').get().val()
     filenamelist = [k for k,v in temp_filenamelist.items()]
 
     # Check if user wants to clear all
-    if user_input.lower() == 'clear all':
+    if user_input == 'Clear All':
         db.child('private').child(userid).child('files').remove()
-        context.bot.send_message(
-            text='Everything iz kil',
-            chat_id=userid,
-            reply_markup=ReplyKeyboardRemove()
+        text='All files have been cleared. Use /start to interact with me again :)'
+        query.edit_message_text(
+            text=text
         )
-        return ConversationHandler.END
 
-    # Check if user_input is valid
-    elif user_input not in filenamelist:
-        invalid_prompt = "B-b-baka! {} wakaranai desu yo UwU try again kudasai".format(user_input)
-        context.bot.send_message(
-            text=invalid_prompt,
-            chat_id=userid
-        )
-        return 68
+        return END
     
     # For valid user input 
     else:
@@ -212,12 +269,11 @@ def clear_files(update, context):
         # Check if no files left
         post_remove_list = db.child('private').child(userid).child('files').get().val()
         if not post_remove_list:
-            context.bot.send_message(
-                text="Everything iz kil",
-                chat_id=userid,
-                reply_markup=ReplyKeyboardRemove()
+            query.edit_message_text(
+                text="All files have been deleted. Use /start to interact with me again :)"
             )
-            return ConversationHandler.END
+
+            return END
 
         button_names = []
         files = db.child('private').child(userid).child('files').get().val()
@@ -228,20 +284,30 @@ def clear_files(update, context):
 
         # Regenerate keyboard
         keyboard = generate_clear_keyboard(button_names, 2)
-
-        context.bot.send_message(
-            text="{} iz kil\nClick filename to delete file. Click 'Clear All' to clear all. Click 'Done' if you're done .______.".format(user_input),
-            chat_id=userid,
-            reply_markup=ReplyKeyboardMarkup(keyboard)
+        query.edit_message_text(
+            text="I have deleted {}.\nClick filename to delete file. Use 'Clear All' to clear all files. Click 'Done' if you're done.".format(user_input),
+            reply_markup=keyboard
         )
-        return 68
+
+        return CLEAR_FILES
+
+def clear_files_done(update, context):
+    query = update.callback_query
+
+    query.answer()
+
+    query.edit_message_text(
+        text='Understood. Use /start to interact with our bot again :)'
+    )
+    return END
 
 def generate_clear_keyboard(filenamelist, rowsize):
+    print('generate_clear_keyboard')
     keyboard = []
     rowcnt = 0
     row = []
     for button in filenamelist:
-        row.append(button)
+        row.append(InlineKeyboardButton(text=button, callback_data=button))
         if rowcnt < rowsize:
             rowcnt += 1
         else:
@@ -250,41 +316,42 @@ def generate_clear_keyboard(filenamelist, rowsize):
             row = []
     if len(row) != 0:
         keyboard.append(copy.copy(row))
-    keyboard.append(['Clear All', 'Done'])
-
-    return keyboard
-
-def clear_reprompt(update, context):
-    reprompt_text = 'Plz no torture our bot owo tell bot-chan which file you want to delete....baka >w<'
-    context.bot.send_message(
-        text=reprompt_text,
-        chat_id=update.message.chat_id
+    keyboard.append(
+        [
+            InlineKeyboardButton(text='Clear All', callback_data='Clear All'),
+            InlineKeyboardButton(text='Done', callback_data='Done')
+        ]
     )
-    return 68
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def find(update, context):
+    print('find')
     # Check if query done from group or PM with bot
-    chat_type = update.message.chat.type
+    query = update.callback_query
+    chat_type = query.message.chat.type
     context.chat_data['included'] = []
     context.chat_data['name_id_map'] = {}
     context.chat_data['params'] = {}
     context.chat_data['included_filenames'] = []
 
+    query.answer()
+
     # Query from group chat
     if chat_type == 'group' or chat_type == 'supergroup':
-        group_id = update.message.chat_id
+        group_id = query.message.chat_id
 
         # Get from db a list of all userIDs for the group
         raw_user_ids = db.child('group').child(group_id).child('users').get().val()
 
         # Check if user_ids is empty
         if not raw_user_ids:
-            prompt_upload = "OwO bot-chan couldn't find data :( Use '/upload' first uwu....b-b-baka"
-            context.bot.send_message(
-                text=prompt_upload,
-                chat_id = group_id
+            prompt_upload = "No data found :( Please use /start -> Upload first."
+            query.edit_message_text(
+                text=prompt_upload
             )
-            return ConversationHandler.END
+
+            return END
 
         user_ids = list(raw_user_ids.keys())
 
@@ -293,12 +360,12 @@ def find(update, context):
         rowcnt = 0
         row = []
         for userid in user_ids:
-            username = update.message.chat.get_member(userid).user.username
-            fullname = update.message.chat.get_member(userid).user.full_name
+            username = query.message.chat.get_member(userid).user.username
+            fullname = query.message.chat.get_member(userid).user.full_name
             final_name = "{} ({})".format(fullname, username)
 
             context.chat_data['name_id_map'][final_name] = userid
-            row.append(final_name)
+            row.append(InlineKeyboardButton(text=final_name, callback_data=final_name))
             if rowcnt < 2:
                 rowcnt += 1
             else:
@@ -308,22 +375,29 @@ def find(update, context):
             
         if len(row) != 0:
             keyboard.append(copy.copy(row))
-        keyboard.append(['Done', 'Cancel'])
+        keyboard.append([InlineKeyboardButton(text='Done', callback_data='Done'), InlineKeyboardButton(text='Cancel', callback_data='Cancel')])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-        prompt = "UwU you want to find common free times? Tell bot-chan who you want to include...baka >w<"
-        context.bot.send_message(
+        prompt = "Select who you want to include in the query."
+        query.edit_message_text(
             text=prompt,
-            chat_id=update.message.chat_id,
-            reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
+            reply_markup=keyboard 
         )
-        return 1
+        return FIND_PERSONS
 
     # Query through PM with bot
     elif chat_type == "private":
-        userid = update.message.chat_id
+        userid = query.message.chat_id
 
         # Check if entry exists in db
         files = db.child('private').child(userid).child('files').get().val()
+        if not files:
+            text = "No data found :( Please use /start -> Upload first."
+            query.edit_message_text(
+                text=text
+            )
+            return END
+
         # print(files)
         temp_filenames = [k for k,v in files.items()]
         
@@ -333,37 +407,51 @@ def find(update, context):
 
         # If entry doesn't exist
         if not context.chat_data['included_filenames']:
-            prompt_upload = "OwO bot-chan couldn't find data :( Use '/upload' first uwu....b-b-baka"
-            context.bot.send_message(
-                text=prompt_upload,
-                chat_id=userid
+            prompt_upload = "No data found :( Please use /start -> Upload first."
+            
+            query.edit_message_text(
+                text=prompt_upload
             )
-            return ConversationHandler.END
+            return END
         
-        keyboard = generate_keyboard_from_userlist(context.chat_data['included_filenames'], 2)
+        # Generate keyboard
+        keyboard = []
+        rowcnt = 0
+        row = []
+        for user in context.chat_data['included_filenames']:
+            row.append(InlineKeyboardButton(text=user, callback_data=user))
+            if rowcnt < 2:
+                rowcnt += 1
+            else:
+                rowcnt = 0
+                keyboard.append(copy.copy(row))
+                row = []
+        if len(row) != 0:
+            keyboard.append(copy.copy(row))
+        keyboard.append([InlineKeyboardButton(text='Cancel', callback_data='Cancel')])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-        prompt = "UwU you want to find common free times? Tell bot-chan which files you want to include...baka >w<"
-        context.bot.send_message(
+        prompt = "Select which files you want to include in the query."
+        query.edit_message_text(
             text=prompt,
-            chat_id=update.message.chat_id,
-            reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
+            reply_markup=keyboard
         )
-        return 1
+        return FIND_PERSONS
 
     # Query through channel
     else:
-        context.bot.send_message(
-            text="bot-chan no worku with channels now...baka >w<",
-            chat_id=update.message.chat_id
+        query.edit_message_text(
+            text="Channels are currently not supported :("
         )
-        return ConversationHandler.END
+        return END
 
 def generate_keyboard_from_userlist(userlist, rowsize):
+    print('generate_keyboard_from_userlist')
     keyboard = []
     rowcnt = 0
     row = []
     for user in userlist:
-        row.append(user)
+        row.append(InlineKeyboardButton(text=user, callback_data=user))
         if rowcnt < rowsize:
             rowcnt += 1
         else:
@@ -372,34 +460,28 @@ def generate_keyboard_from_userlist(userlist, rowsize):
             row = []
     if len(row) != 0:
         keyboard.append(copy.copy(row))
-    keyboard.append(['Done', 'Cancel'])
+    keyboard.append([InlineKeyboardButton(text='Done', callback_data='Done'), InlineKeyboardButton(text='Cancel', callback_data='Cancel')])
 
-    return keyboard
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def find_persons_to_query(update, context):
-    user_selection = update.message.text
-    group_id = update.message.chat.id
-    chat_type = update.message.chat.type
+    print("find_persons_to_query")
+    query = update.callback_query
+    user_selection = query.data
+    group_id = query.message.chat.id
+    chat_type = query.message.chat.type
+
+    query.answer()
 
     if chat_type == 'private':
         # User done selecting files
         if user_selection == 'Done':
-            prompt_time = "Oki uwu now plz gib bot-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
-            context.bot.send_message(
-                text=prompt_time,
-                chat_id=update.message.chat_id,
-                reply_markup=ReplyKeyboardRemove()
+            prompt_time = "Okay now please give me a start date to search from in the format:\nDD/MM/YYYY HH:MM\nUse '/cancel' to cancel."
+            query.edit_message_text(
+                text=prompt_time
             )
-            return 2
 
-        # Check if user input in saved chat_data
-        elif user_selection not in context.chat_data['included_filenames']:
-            reprompt = "B-b-baka...nani kore is this bot-chan no understando try again plz"
-            context.bot.send_message(
-                text=reprompt,
-                chat_id=update.message.chat_id
-            )
-            return 1
+            return FIND_START
 
         # Valid user input
         else:
@@ -418,43 +500,32 @@ def find_persons_to_query(update, context):
 
             if files_left:
                 keyboard = generate_keyboard_from_userlist(files_left, 2)
-                prompt_for_next = "Ara ara~ bot-chan has included {} >w< Tell bot-onee-chan what else you want to include :3".format(user_selection)
-                context.bot.send_message(
+                prompt_for_next = "I have included {}. Select other files that you want to include.".format(user_selection)
+                query.edit_message_text(
                     text=prompt_for_next,
-                    chat_id=group_id,
-                    reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
+                    reply_markup=keyboard
                 )
-                return 1
+
+                return FIND_PERSONS
 
             # No users left
             else:
-                prompt_for_next = "Ara ara~ Bot-chan sees you've added all your files already >:) Give bot-onee-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
-                context.bot.send_message(
-                    text=prompt_for_next,
-                    chat_id=group_id,
-                    reply_markup=ReplyKeyboardRemove()
+                prompt_for_next = "I see you've added all your files already.\nPlease give me a start date to search from in the format:\nDD/MM/YYYY HH:MM"
+                query.edit_message_text(
+                    text=prompt_for_next
                 )
-                return 2
+
+                return FIND_START
 
     else:
         # User done selecting users
         if user_selection == 'Done':
-            prompt_time = "Oki uwu now plz gib bot-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
-            context.bot.send_message(
-                text=prompt_time,
-                chat_id=update.message.chat_id,
-                reply_markup=ReplyKeyboardRemove()
+            prompt_time = "Okay, now please give me a start date to search from in the format:\nDD/MM/YYYY HH:MM"
+            query.edit_message_text(
+                    text=prompt_time
             )
-            return 2
 
-        # Check if username in saved chat_data
-        elif user_selection not in context.chat_data['name_id_map'].keys():
-            reprompt = "B-b-baka...nani kore is this bot-chan no understando try again plz"
-            context.bot.send_message(
-                text=reprompt,
-                chat_id=update.message.chat_id
-            )
-            return 1
+            return FIND_START
 
         # Definitely valid user input
         else:
@@ -471,74 +542,86 @@ def find_persons_to_query(update, context):
             # Users left
             if users_left:
                 keyboard = generate_keyboard_from_userlist(users_left, 2)
-                prompt_for_next = "Ara ara~ bot-chan has included {} >w< Tell bot-onee-chan who else you want to include :3".format(user_selection)
-                context.bot.send_message(
+                prompt_for_next = "I have included {}. Select other files that you want to include.".format(user_selection)
+                query.edit_message_text(
                     text=prompt_for_next,
-                    chat_id=group_id,
-                    reply_markup=ReplyKeyboardMarkup(keyboard=keyboard)
+                    reply_markup=keyboard
                 )
-                return 1
+                
+                return FIND_PERSONS
 
             # No users left
             else:
-                prompt_for_next = "Ara ara~ Bot-chan sees you've added all your friends already >:) Give bot-onee-chan a start date to search from e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021"
-                context.bot.send_message(
-                    text=prompt_for_next,
-                    chat_id=group_id,
-                    reply_markup=ReplyKeyboardRemove()
+                prompt_for_next = "I see you've added all your friends already.\nPlease give me a start date to search from in the format:\nDD/MM/YYYY HH:MM"
+                query.edit_message_text(
+                    text=prompt_for_next
                 )
-                return 2
+
+                return FIND_START
+
+def cancel_find_callback(update, context):
+    print('cancel_find_callback')
+    query = update.callback_query
+    cancel_text = "We have cancelled your request.\nUse /start to interact with the bot again :)"
+    query.answer()
+    query.edit_message_text(
+        text=cancel_text
+    )
+    return END
 
 def cancel_find(update, context):
-    cancel_text = "Bot-chan cancelled your request...d-d-don't get me wrong, it's not like I want you to use me again...baka"
+    print('cancel_find')
+    cancel_text = "We have cancelled your request.\nUse /start to interact with the bot again :)"
     context.bot.send_message(
         text=cancel_text,
-        chat_id=update.message.chat_id,
-        reply_markup=ReplyKeyboardRemove() 
+        chat_id=update.message.chat_id
     )
-    return ConversationHandler.END
+    return END
 
 def find_start_time(update, context):
+    print('find_start_time')
     user_input = update.message.text
     try:
         parsed_date = datetime.strptime(user_input, "%d/%m/%Y %H:%M")
         context.chat_data['params']['start'] = parsed_date
-        prompt_end_time = "Yare yare daze bot-chan has a start time now OwO Gib me owari no toki >w< e.g. '01/01/2021 15:00' for 3pm on 1 Jan 2021\nTo tell bot-chan yamete kudasai, type '/cancel'"
+        prompt_end_time = "You have provided a start time.\nPlease give me an end date to search from in the format:\nDD/MM/YYYY HH:MM\nTo cancel, type '/cancel'."
         context.bot.send_message(
             text=prompt_end_time,
             chat_id=update.message.chat_id
         )
-        return 3
+        return FIND_END
 
     except ValueError:
-        error_prompt = "B-b-baka! {} wakaranai desu yo UwU try again kudasai".format(user_input)
+        error_prompt = "I do not understand {}.\nPlease give me a start date to search from in the format:\nDD/MM/YYYY HH:MM\nTo cancel, type '/cancel'".format(user_input)
         context.bot.send_message(
             text=error_prompt,
             chat_id=update.message.chat_id
         )
-        return 2
+        return FIND_START
 
 def find_end_time(update, context):
+    print('find_end_time')
     user_input = update.message.text
     try:
         parsed_date = datetime.strptime(user_input, "%d/%m/%Y %H:%M")
         context.chat_data['params']['end'] = parsed_date
-        prompt_end_time = "Yare yare daze bot-chan has an end time now OwO Tell bot-onee-san how much free time you need >w< e.g. '2' for minimum 2 hour blocks of free time\nBot-chan only supports intervals up to 24 for now UwU\nTo tell bot-chan yamete kudasai, type '/cancel'"
+        prompt_end_time = "You have provided an end time.\nPlease give me a minimum required interval (between 0 to 24).\nTo cancel, type '/cancel'."
         context.bot.send_message(
             text=prompt_end_time,
             chat_id=update.message.chat_id
         )
-        return 4
+        return FIND_INT
 
     except ValueError:
-        error_prompt = "B-b-baka! {} wakaranai desu yo UwU try again kudasai".format(user_input)
+        error_prompt = "I do not understand {}.\nPlease give me an end date to search from in the format:\nDD/MM/YYYY HH:MM\nTo cancel, type '/cancel'".format(user_input)
         context.bot.send_message(
             text=error_prompt,
             chat_id=update.message.chat_id
         )
-        return 3
+        return FIND_END
 
 def process_result(res_dict):
+    print('process_result')
     final = ""
     for day,times in res_dict.items():
         intermediate = ""
@@ -567,6 +650,7 @@ def process_result(res_dict):
     return final
 
 def find_min_interval(update, context):
+    print('find_min_interval')
     user_input = update.message.text
 
     try:
@@ -582,90 +666,105 @@ def find_min_interval(update, context):
         )
         return ConversationHandler.END
     except ValueError:
-        error_prompt = "Blimey! You must have made a mistake you nimwit! What is {}? Utter bollocks! Try again!".format(user_input)
+        error_prompt = "I do not understand {}.\nPlease give me a minimum required interval (between 0 to 24).\nTo cancel, type '/cancel'.".format(user_input)
         context.bot.send_message(
             text=error_prompt,
             chat_id=update.message.chat_id
         )
-        return 4
+        return FIND_INT
 
 def upload(update, context):
-    group_id = update.message.chat_id
-    user_id = update.message.from_user.id
-    chat_type = update.message.chat.type
+    print('upload')
+    query = update.callback_query
+    group_id = query.message.chat_id
+    user_id = query.from_user.id
+    chat_type = query.message.chat.type
+
+    query.answer()
 
     if chat_type == "channel":
-        prompt = "Ara ara~ Channel wa dame desu yo"
-        context.bot.send_message(
-            text=prompt,
-            chat_id=group_id
+        prompt = "I currently do not support channels :("
+        query.edit_message_text(
+            text=prompt
         )
+        # context.bot.send_message(
+        #     text=prompt,
+        #     chat_id=group_id
+        # )
+        return END
 
     is_PM = False if chat_type == "group" or chat_type == "supergroup" else True
 
     # Case for PM
     if is_PM:
-        upload_text = "I-it's not like I need your .ics files b-b-baka! Upload your .ics files thenk or use '/cancel' to cancel"
-        context.bot.send_message(
-            text=upload_text,
-            chat_id=update.message.chat_id
+        upload_text = "Please upload your .ics files or use '/cancel' to cancel."
+        query.edit_message_text(
+            text=upload_text
         )
-        return 1
+        # context.bot.send_message(
+        #     text=upload_text,
+        #     chat_id=update.message.chat_id
+        # )
+        return ON_DOC_UPLOAD
 
     # Case for group chat
     else:
-        # print(db.child('group').child(group_id).child(user_id).get().val())
         # Check if ics file for this user already exists in db
         if db.child('group').child(group_id).child('users').child(user_id).child('icalrep').get().val() != None:
             # print('Prompt group overwrite')
             date = db.child('group').child(group_id).child('users').child(user_id).child('dateupdated').get().val()
-            prompt = "B-b-baka, you have an .ics in me already uploaded on {}...send 'yes' to overwrite or 'no' to cancel".format(date)
-            context.bot.send_message(
-                text=prompt,
-                chat_id=group_id
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text='Yes', callback_data='Yes'), 
+                        InlineKeyboardButton(text='No', callback_data='No')
+                    ]
+                ]
             )
-            return 2
+            prompt = "You already have an .ics with me already uploaded on {}.\nUse 'Yes' to overwrite or 'No' to cancel".format(date)
+            query.edit_message_text(
+                text=prompt,
+                reply_markup=keyboard
+            )
 
-        upload_text = "I-it's not like I need your .ics files b-b-baka! Upload your .ics files thenk or use '/cancel' to cancel"
-        context.bot.send_message(
-            text=upload_text,
-            chat_id=update.message.chat_id
+            return ASK_CONFIRMATION
+
+        upload_text = "Please upload your .ics files or use '/cancel' to cancel."
+        query.edit_message_text(
+            text=upload_text
         )
-        return 1
+
+        return ON_DOC_UPLOAD
 
 def reprompt(update, context):
-    reprompt_text = 'Plz no torture our bot owo send proper .ics file pls....baka >w<'
+    print('reprompt')
+    reprompt_text = 'Invalid file uploaded! Please try again.'
     context.bot.send_message(
         text=reprompt_text,
         chat_id=update.message.chat_id
     )
-    return 1
+    return ON_DOC_UPLOAD
 
 def ask_confirmation(update, context):
-    msg = update.message.text
-    if msg == 'yes':
-        upload_text = 'Plz send .ics files thenk or use "/cancel" to cancel'
-        context.bot.send_message(
-            text=upload_text,
-            chat_id=update.message.chat_id
+    print('ask_confirmation')
+    query = update.callback_query
+    user_selection = query.data
+    if user_selection == 'Yes':
+        upload_text = "Please upload your .ics files or use '/cancel' to cancel."
+        query.edit_message_text(
+            text=upload_text
         )
-        return 1
+
+        return ON_DOC_UPLOAD
     else:
-        context.bot.send_message(
-            text='Upload iz kil',
-            chat_id=update.message.chat_id
+        query.edit_message_text(
+            text='Understood. Use /start to interact with me again :)'
         )
-        return ConversationHandler.END
 
-def upload_not_understood(update, context):
-    text = "I no understando, zen zen wakaranai...baka...\nSend 'yes' to overwrite or 'no' to cancel"
-    context.bot.send_message(
-        text=text,
-        chat_id=update.message.chat_id
-    )
-    return 2
+        return END
 
-def on_doc_upload(update, context):    
+def on_doc_upload(update, context):   
+    print('on_doc_upload') 
     group_id = update.message.chat_id
     user_id = update.message.from_user.id
     doc = update.message.document
@@ -690,13 +789,14 @@ def on_doc_upload(update, context):
     else:
         db.child('group').child(group_id).child('users').child(user_id).update({'icalrep':content, 'dateupdated':chat_dt})
 
-    confirmation = "UwU bot-chan has successfully uploaded {}'s file...baka".format(update.message.from_user.username)
+    confirmation_grp = "{}'s file has been successfully uploaded.\nUse /start to interact with me again :)".format(update.message.from_user.username)
+    confirmation_prv = "{} has been successfully uploaded.\nUse /start to interact with me again :)".format(filename)
     context.bot.send_message(
-        text=confirmation,
+        text=confirmation_prv if is_PM else confirmation_grp,
         chat_id=group_id
     )
 
-    return ConversationHandler.END
+    return END
 
 def error(update, context):
     print(context.error)
@@ -713,48 +813,71 @@ def main():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher;
 
-    # Add command handler for initializing bot
-    dp.add_handler(CommandHandler('start', start))
-
-    # Add commmand handler for help
-    dp.add_handler(CommandHandler('help', help))
-
-    # Add command handler for clear
-    delete_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('clear', clear)],
+    # New upload convo handler
+    upload_convo_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(upload, pattern='^' + str(UPLOAD) + '$')],
         states={
-            68 : [MessageHandler(Filters.regex('(?i)^Done$'), cancel_find), CommandHandler('cancel', cancel_find), MessageHandler(Filters.text, clear_files)]
+            ON_DOC_UPLOAD : [
+                MessageHandler(Filters.document.file_extension("ics"), on_doc_upload), 
+                CommandHandler('cancel', cancel_upload), 
+                MessageHandler(~Filters.document.file_extension("ics"), reprompt)
+            ],
+            ASK_CONFIRMATION : [CallbackQueryHandler(ask_confirmation)]
         },
-        fallbacks=[MessageHandler(~Filters.text, clear_reprompt), CommandHandler('cancel', cancel_find)]
+        fallbacks=[],
+        map_to_parent={
+            END : END
+        }
     )
-    dp.add_handler(delete_conv_handler)
 
-    # Add conversation handler for uploading document
-    upload_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('upload', upload)],
+    # New clear convo handler
+    clear_convo_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(clear, pattern='^' + str(CLEAR) + '$')],
         states={
-            1 : [MessageHandler(Filters.document.file_extension("ics"), on_doc_upload), CommandHandler('cancel', cancel_upload)],
-            2 : [MessageHandler(Filters.regex('(?i)^yes$|^no$'), ask_confirmation), MessageHandler(~Filters.regex('(?i)^yes$|^no$'), upload_not_understood)]
+            CLEAR_FILES : [CallbackQueryHandler(clear_files_done, pattern='^Done$'), CallbackQueryHandler(clear_files)]
         },
-        fallbacks=[MessageHandler(~Filters.document.file_extension("ics"), reprompt), CommandHandler('cancel', cancel_upload)]
+        fallbacks=[],
+        map_to_parent={
+            END : END
+        }
     )
-    dp.add_handler(upload_conv_handler)
 
-    # Add conversation handler for querying bot
-    query_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('find', find)],
+    # New find convo handler
+    find_convo_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(find, pattern='^' + str(FIND) + '$')],
         states={
-            1 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.regex('(?i)^Cancel$'), cancel_find), MessageHandler(Filters.text, find_persons_to_query)],
-            2 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_start_time)],
-            3 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_end_time)],
-            4 : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_min_interval)]
+            FIND_PERSONS : [CallbackQueryHandler(cancel_find_callback, pattern="^Cancel$"), CallbackQueryHandler(find_persons_to_query)],
+            FIND_START : [CommandHandler('cancel', cancel_find), MessageHandler(Filters.text, find_start_time)],
+            FIND_END : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_end_time)],
+            FIND_INT : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_min_interval)]
         },
-        fallbacks=[CommandHandler('cancel', cancel_find)]
+        fallbacks=[],
+        map_to_parent={
+            END : END
+        }
     )
-    dp.add_handler(query_conv_handler)
 
+    # Selection function
+    select_handlers = [
+        CallbackQueryHandler(help, pattern='^' + str(HELP) + '$'), 
+        CallbackQueryHandler(view, pattern='^' + str(VIEW) + '$'),
+        CallbackQueryHandler(end, pattern='^' + str(END) + '$'),
+        find_convo_handler,
+        clear_convo_handler,
+        upload_convo_handler
+        ]
+
+    # Add main conversation handler for user interaction
+    interact_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            SELECTION : select_handlers,
+            END : [CommandHandler('start', start)]
+        },
+        fallbacks=[]
+    )
+    dp.add_handler(interact_conv_handler)
     # Add command handler for view
-    dp.add_handler(CommandHandler('view', view))
 
     # Add error handler for bot
     dp.add_error_handler(error)
