@@ -17,6 +17,10 @@ from findtimes import *
 # Constants for bot
 (
     HELP,
+    FAQ_SELECTION,
+    FAQ_PURPOSE_SELECTOR,
+    FAQ_COMMAND_SELECTOR,
+    FAQ_EXPORT,
     CLEAR,
     CLEAR_FILES,
     FIND,
@@ -30,7 +34,7 @@ from findtimes import *
     FIND_END,
     FIND_INT,
     END
-) = map(chr, range(14))
+) = map(chr, range(18))
 
 # For deployment
 DB_TOKEN = os.environ.get("DB_TOKEN")
@@ -89,20 +93,190 @@ def end(update, context):
 
 def help(update, context):
     query = update.callback_query
-    chat_type = query.message.chat.type
-
-    help_group = "To use the bot, add bot-chan to a group chat, and have all members use '/upload' to upload their .ics files!\n To query for common free times, use '/find'\nTo clear your uploaded file, use '/clear'...baka :3"
-    help_private = "To use the bot, use /upload to upload the files that you want to compare.\nTo query for common free times, use '/find'.\nTo clear uploaded files, use '/clear'\nTo cancel at any point of time during uploading or querying, use '/cancel'...baka :3"
     
     query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton(text='How does the bot work?', callback_data='PURPOSE')],
+        [InlineKeyboardButton(text='How do I an export an .ics file from my calendar app?', callback_data='EXPORT')],
+        [InlineKeyboardButton(text='How do I use the commands?', callback_data='COMMAND')],
+        [InlineKeyboardButton(text='Cancel', callback_data='END')]
+    ]
 
-    if chat_type == 'private':
-        query.edit_message_text(text=help_private)
+    query.edit_message_text(
+        text='Hi, what do you need help with?',
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    return FAQ_SELECTION
+
+def faq_selection(update, context):
+    query = update.callback_query
+    user_selection = query.data
+
+    query.answer()
+
+    if user_selection == "END":
+        query.edit_message_text(
+            text='Understood. Use /start to interact with our bot again :)'
+        )
+        return END
+    elif user_selection == "PURPOSE":
+        purpose_of_life = ("This bot finds common free times amongst uploaded .ics (calendar) files.\n\n"
+        "Group Chat:\n\nEach member uploads their own calendar file. The bot can then find common free times amongst user-specified members.\n\n\n"
+        "Private Message:\n\nThe user can upload one or more calendar file(s). The bot can then find common free times amongst user-specified files.\n\n\n"
+        "Which usage scenario do you need more information on?") 
+        
+        keyboard = [
+            [InlineKeyboardButton(text="Use in a Group Chat", callback_data="GROUP")],
+            [InlineKeyboardButton(text="Use in Private Message", callback_data="PM")],
+            [InlineKeyboardButton(text="Cancel", callback_data="END")],
+            [InlineKeyboardButton(text="Go Back", callback_data="BACK")]
+        ]
+        query.edit_message_text(
+            text=purpose_of_life,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        return FAQ_PURPOSE_SELECTOR
+    elif user_selection == "COMMAND":
+        command_help = ("Explanation of basic commands:\n\n"
+        "1) View - Lists out all files stored for that particular chat.\n\n"
+        "2) Upload - Allows the user to upload a file to the bot. Click the button below for more information.\n\n"
+        "3) Find - Searches for common free times amongst selected .ics files/users. Click the button below for more information.\n\n"
+        "4) Clear - Deletes previously uploaded files by the user. Click the button below for more information.\n\n")
+        
+        keyboard = [
+            [InlineKeyboardButton(text="How do I use 'Upload'?", callback_data='HELP_UPLOAD')],
+            [InlineKeyboardButton(text="How do I use 'Find'?", callback_data='HELP_FIND')],
+            [InlineKeyboardButton(text="How do I use 'Clear'?", callback_data="HELP_CLEAR")],
+            [InlineKeyboardButton(text="Go back", callback_data="BACK")],
+            [InlineKeyboardButton(text="Cancel", callback_data="END")]
+        ]
+        
+        query.edit_message_text(
+            text=command_help,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        return FAQ_COMMAND_SELECTOR
+    else:
+        export_help = ("For help exporting your calendars to .ics files, refer to the links below.\n\n"
+        "Samsung Calendar/S Planner -\nhttps://toolbox.iskysoft.com/android-transfer/export-samsung-calendar.html\n\n"
+        "Apple Calendar -\nhttps://support.apple.com/en-sg/guide/calendar/icl1023/mac\n\n"
+        "Google Calendar -\nhttps://support.google.com/calendar/answer/37111?hl=en\n\n"
+        "Outlook Calendar -\nhttps://www.techwalla.com/articles/how-to-convert-an-outlook-calendar-to-ics\n\n\n"
+        "To interact with the bot again, use /start :)")
+
+        query.edit_message_text(
+            text=export_help
+        )
+        return END
+
+def faq_purpose_selector(update, context):
+    query = update.callback_query
+    user_selection = query.data
+
+    query.answer()
+
+    if user_selection == "END":
+        query.edit_message_text(
+            text="Understood. Use /start to interact with the bot again :)"
+        )
+        return END
+    elif user_selection ==  "BACK":
+        keyboard = [
+            [InlineKeyboardButton(text='How does the bot work?', callback_data='PURPOSE')],
+            [InlineKeyboardButton(text='How do I an export an .ics file from my calendar app?', callback_data='EXPORT')],
+            [InlineKeyboardButton(text='How do I use the commands?', callback_data='COMMAND')],
+            [InlineKeyboardButton(text='Cancel', callback_data='END')]
+        ]
+
+        query.edit_message_text(
+            text='Hi, what do you need help with?',
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        return FAQ_SELECTION
+    elif user_selection == "GROUP":
+        group_help = ("Group Chat:\n\n"
+        "1) Add the bot to the group.\n\n"
+        "2) Get your group members to upload their .ics files to the bot using the 'Upload' button.\n\n"
+        "3) After uploading, use the 'Find' button to ask the bot for common free times amongst user-selected members.\n\n"
+        "4) Users can choose to delete their uploaded files at any time using the 'Clear' button.\n\n\n"
+        "Use /start to interact with the bot again :)")
+        
+        query.edit_message_text(
+            text=group_help
+        )
+        return END
+    else:
+        pm_help = ("Private Message:\n\n"
+        "1) Upload your .ics files using the 'Upload' button.\n\n"
+        "2) After uploading, use the 'Find' button to ask the bot for common free times amongst user-selected files.\n\n"
+        "3) Users can choose to delete any or all of their uploaded files at any time using the 'Clear button.\n\n\n"
+        "Use /start to interact with the bot again :)")
+        
+        query.edit_message_text(
+            text=pm_help
+        )
+        return END
+
+def faq_command_selector(update, context):
+    query = update.callback_query
+    user_selection = query.data
+
+    if user_selection == "END":
+        query.edit_message_text(
+            text="Understood. Use /start to interact with the bot again :)"
+        )
+        return END
+    elif user_selection == "BACK":
+        keyboard = [
+            [InlineKeyboardButton(text='How does the bot work?', callback_data='PURPOSE')],
+            [InlineKeyboardButton(text='How do I an export an .ics file from my calendar app?', callback_data='EXPORT')],
+            [InlineKeyboardButton(text='How do I use the commands?', callback_data='COMMAND')],
+            [InlineKeyboardButton(text='Cancel', callback_data='END')]
+        ]
+
+        query.edit_message_text(
+            text='Hi, what do you need help with?',
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        return FAQ_SELECTION
+    elif user_selection == "HELP_FIND":
+        help_find_text = ("1) This function only works if there are previously uploaded .ics files for that chat (group or PM).\n\n"
+        "2) A menu will appear allowing you to select files(in PM) or users(in group chat) that you want to include in your query.\n\n"
+        "3) After selecting users/files that you want to include, click the 'Done' button.\n\n"
+        "4) The bot will then prompt for a start datetime, followed by an end datetime in DD/MM/YYYY HH:MM format.\n"
+        "  > These represent the search interval for the bot, so only free times in this interval will be displayed.\n\n"
+        "5) The bot will then ask for an interval (in hours) between 0 to 24.\n"
+        "  > This represents the minimum time interval for a block of free time to be considered valid.\n\n"
+        "6) Use the 'Cancel' button or the '/cancel' command, whichever is available, to cancel the operation.\n\n\n"
+        "Use the /start command to interact with the bot again :)")
+
+        query.edit_message_text(
+            text=help_find_text
+        )
+        return END
+    elif user_selection == "HELP_UPLOAD":
+        upload_help = ("Groups allow only 1 file per user, whereas PM allows multiple files for the user.\n\n"
+        "If you have a previously uploaded file in a group, the bot will ask if you want to overwrite the file.\n\n\n"
+        "Use /start to interact with the bot again :)")
+
+        query.edit_message_text(
+            text=upload_help
+        )
+        return END
 
     else:
-        query.edit_message_text(text=help_group)
-    
-    return ConversationHandler.END
+        clear_help = ("Group Chat:\n\nThe 'Clear' button will clear only the file previously uploaded by the user running the command.\n"
+        "Other users' files will remain intact.\n\n\n"
+        "Private Message:\n\nThe 'Clear' button will open a menu containing files that the user has previously uploaded.\n"
+        "Select the file you wish to delete. Use the 'Clear All' button to delete all stored files.\n"
+        "Use the 'Done' button when you are done deleting your desired files.\n\n\n"
+        "Use /start to interact with the bot again :)")
+
+        query.edit_message_text(
+            text=clear_help
+        )
+        return END
 
 def view(update, context):
     print('view')
@@ -664,7 +838,7 @@ def find_min_interval(update, context):
             text=result,
             chat_id=update.message.chat_id
         )
-        return ConversationHandler.END
+        return END
     except ValueError:
         error_prompt = "I do not understand {}.\nPlease give me a minimum required interval (between 0 to 24).\nTo cancel, type '/cancel'.".format(user_input)
         context.bot.send_message(
@@ -812,7 +986,7 @@ def main():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher;
 
-    # New upload convo handler
+    # Upload convo handler
     upload_convo_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(upload, pattern='^' + str(UPLOAD) + '$')],
         states={
@@ -829,7 +1003,7 @@ def main():
         }
     )
 
-    # New clear convo handler
+    # Clear convo handler
     clear_convo_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(clear, pattern='^' + str(CLEAR) + '$')],
         states={
@@ -841,7 +1015,7 @@ def main():
         }
     )
 
-    # New find convo handler
+    # Find convo handler
     find_convo_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(find, pattern='^' + str(FIND) + '$')],
         states={
@@ -856,14 +1030,28 @@ def main():
         }
     )
 
+    # Help convo handler
+    help_convo_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(help, pattern='^' + str(HELP) + '$')],
+        states={
+            FAQ_SELECTION : [CallbackQueryHandler(faq_selection)],
+            FAQ_PURPOSE_SELECTOR : [CallbackQueryHandler(faq_purpose_selector)],
+            FAQ_COMMAND_SELECTOR : [CallbackQueryHandler(faq_command_selector)]
+        },
+        fallbacks=[],
+        map_to_parent={
+            END : END
+        }
+    )
+
     # Selection function
     select_handlers = [
-        CallbackQueryHandler(help, pattern='^' + str(HELP) + '$'), 
-        CallbackQueryHandler(view, pattern='^' + str(VIEW) + '$'),
-        CallbackQueryHandler(end, pattern='^' + str(END) + '$'),
-        find_convo_handler,
-        clear_convo_handler,
-        upload_convo_handler
+            help_convo_handler,
+            CallbackQueryHandler(view, pattern='^' + str(VIEW) + '$'),
+            CallbackQueryHandler(end, pattern='^' + str(END) + '$'),
+            find_convo_handler,
+            clear_convo_handler,
+            upload_convo_handler
         ]
 
     # Add main conversation handler for user interaction
