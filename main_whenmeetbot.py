@@ -23,6 +23,7 @@ from findtimes import *
     FAQ_EXPORT,
     CLEAR,
     CLEAR_FILES,
+    CLEAR_CONFIRMATION,
     FIND,
     VIEW,
     UPLOAD,
@@ -34,12 +35,11 @@ from findtimes import *
     FIND_END,
     FIND_INT,
     END
-) = map(chr, range(18))
+) = map(chr, range(19))
 
 # For deployment
 DB_TOKEN = os.environ.get("DB_TOKEN")
 TOKEN = os.environ.get("TOKEN")
-# PORT = os.getenv('PORT', default=88)
 
 # For testing
 # TOKEN = TEST_TOKEN
@@ -61,16 +61,18 @@ db = firebase.database()
 
 def start(update, context):
     buttons = [
-        [
-            InlineKeyboardButton(text='Help', callback_data=str(HELP)), 
-            InlineKeyboardButton(text='View', callback_data=str(VIEW)), 
-            InlineKeyboardButton(text='Upload', callback_data=str(UPLOAD))
-        ],
-        [
-            InlineKeyboardButton(text='Find', callback_data=str(FIND)), 
-            InlineKeyboardButton(text='Clear', callback_data=str(CLEAR)),
-            InlineKeyboardButton(text='Cancel', callback_data=str(END))
-        ]
+            [
+                InlineKeyboardButton(text='Help', callback_data=str(HELP)), 
+                InlineKeyboardButton(text='View files', callback_data=str(VIEW))
+            ], 
+            [
+                InlineKeyboardButton(text='Upload a file', callback_data=str(UPLOAD)),
+                InlineKeyboardButton(text='Find free times', callback_data=str(FIND))
+            ], 
+            [
+                InlineKeyboardButton(text='Clear files', callback_data=str(CLEAR)),
+                InlineKeyboardButton(text='Exit', callback_data=str(END))
+            ]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     
@@ -139,15 +141,15 @@ def faq_selection(update, context):
         return FAQ_PURPOSE_SELECTOR
     elif user_selection == "COMMAND":
         command_help = ("Explanation of basic commands:\n\n"
-        "1) View - Lists out all files stored for that particular chat.\n\n"
-        "2) Upload - Allows the user to upload a file to the bot. Click the button below for more information.\n\n"
-        "3) Find - Searches for common free times amongst selected .ics files/users. Click the button below for more information.\n\n"
-        "4) Clear - Deletes previously uploaded files by the user. Click the button below for more information.\n\n")
+        "1) View files - Lists out all files stored for that particular chat.\n\n"
+        "2) Upload a file - Allows the user to upload a file to the bot. Click the button below for more information.\n\n"
+        "3) Find free times - Searches for common free times amongst selected .ics files/users. Click the button below for more information.\n\n"
+        "4) Clear files - Deletes previously uploaded files by the user. Click the button below for more information.\n\n")
         
         keyboard = [
-            [InlineKeyboardButton(text="How do I use 'Upload'?", callback_data='HELP_UPLOAD')],
-            [InlineKeyboardButton(text="How do I use 'Find'?", callback_data='HELP_FIND')],
-            [InlineKeyboardButton(text="How do I use 'Clear'?", callback_data="HELP_CLEAR")],
+            [InlineKeyboardButton(text="How do I use 'Upload a file'?", callback_data='HELP_UPLOAD')],
+            [InlineKeyboardButton(text="How do I use 'Find free times'?", callback_data='HELP_FIND')],
+            [InlineKeyboardButton(text="How do I use 'Clear files'?", callback_data="HELP_CLEAR")],
             [InlineKeyboardButton(text="Go back", callback_data="BACK")],
             [InlineKeyboardButton(text="Cancel", callback_data="END")]
         ]
@@ -197,9 +199,9 @@ def faq_purpose_selector(update, context):
     elif user_selection == "GROUP":
         group_help = ("Group Chat:\n\n"
         "1) Add the bot to the group.\n\n"
-        "2) Get your group members to upload their .ics files to the bot using the 'Upload' button.\n\n"
-        "3) After uploading, use the 'Find' button to ask the bot for common free times amongst user-selected members.\n\n"
-        "4) Users can choose to delete their uploaded files at any time using the 'Clear' button.\n\n\n"
+        "2) Get your group members to upload their .ics files to the bot using the 'Upload a file' button.\n\n"
+        "3) After uploading, use the 'Find free times' button to ask the bot for common free times amongst user-selected members.\n\n"
+        "4) Users can choose to delete their uploaded files at any time using the 'Clear files' button.\n\n\n"
         "Use /start to interact with the bot again :)")
         
         query.edit_message_text(
@@ -208,9 +210,9 @@ def faq_purpose_selector(update, context):
         return END
     else:
         pm_help = ("Private Message:\n\n"
-        "1) Upload your .ics files using the 'Upload' button.\n\n"
-        "2) After uploading, use the 'Find' button to ask the bot for common free times amongst user-selected files.\n\n"
-        "3) Users can choose to delete any or all of their uploaded files at any time using the 'Clear button.\n\n\n"
+        "1) Upload your .ics files using the 'Upload a file' button.\n\n"
+        "2) After uploading, use the 'Find free times' button to ask the bot for common free times amongst user-selected files.\n\n"
+        "3) Users can choose to delete any or all of their uploaded files at any time using the 'Clear files' button.\n\n\n"
         "Use /start to interact with the bot again :)")
         
         query.edit_message_text(
@@ -266,9 +268,9 @@ def faq_command_selector(update, context):
         return END
 
     else:
-        clear_help = ("Group Chat:\n\nThe 'Clear' button will clear only the file previously uploaded by the user running the command.\n"
+        clear_help = ("Group Chat:\n\nThe 'Clear files' button will clear only the file previously uploaded by the user running the command.\n"
         "Other users' files will remain intact.\n\n\n"
-        "Private Message:\n\nThe 'Clear' button will open a menu containing files that the user has previously uploaded.\n"
+        "Private Message:\n\nThe 'Clear files' button will open a menu containing files that the user has previously uploaded.\n"
         "Select the file you wish to delete. Use the 'Clear All' button to delete all stored files.\n"
         "Use the 'Done' button when you are done deleting your desired files.\n\n\n"
         "Use /start to interact with the bot again :)")
@@ -290,7 +292,7 @@ def view(update, context):
 
         # Check if files are empty
         if not files:
-            msg = 'There are currently no files stored with me. Please use /start -> Upload to upload a file.'
+            msg = 'There are currently no files stored with me. Please use /start -> "Upload a file" to upload a file.'
             query.edit_message_text(text=msg)
             return ConversationHandler.END
         
@@ -313,7 +315,7 @@ def view(update, context):
 
         # Deal with case where no one has uploads
         if not files:
-            msg = 'There are currently no files stored with me. Please use /start -> Upload to upload a file.'
+            msg = 'There are currently no files stored with me. Please use /start -> "Upload a file" to upload a file.'
             query.edit_message_text(text=msg)
 
         # Case with files
@@ -351,8 +353,7 @@ def clear(update, context):
     query = update.callback_query
     chat_type = query.message.chat.type
     query.answer()
-    print(update) 
-    print('\n\n')
+
     if chat_type == 'private':
         user_id = query.from_user.id
         print('user_id: {}'.format(user_id))
@@ -398,21 +399,28 @@ def clear(update, context):
     else:
         group_id = query.message.chat_id
         user_id = query.from_user.id
-        print('groupid: {}'.format(group_id))
-        print('userid: {}'.format(user_id))
 
-        db.child('group').child(group_id).child('users').child(user_id).remove()
-
-        remove_text = "I have removed your data from my storage. Use /start to interact with me again :)"
-        query.edit_message_text(
-            text=remove_text
-        )
-        # context.bot.send_message(
-        #     text=remove_text,
-        #     chat_id=user_id if chat_type == 'private' else group_id
-        # )
-
-        return END
+        data = db.child('group').child(group_id).child('users').child(user_id).get().val()
+        if not data:
+            prompt = "There are no files uploaded by you. Use /start to interact with me again :)"
+            query.edit_message_text(
+                text=prompt
+            )
+            return END
+        else:
+            date = data['dateupdated']
+            prompt = "Are you sure you want to remove your file?\nLast updated: {}".format(date)
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text='Yes', callback_data='Gucci'), 
+                    InlineKeyboardButton(text='No', callback_data='Gang')
+                ]
+            ])
+            query.edit_message_text(
+                text=prompt,
+                reply_markup=keyboard
+            )
+            return CLEAR_CONFIRMATION
 
 def clear_files(update, context):
     print('clear_files')
@@ -475,6 +483,29 @@ def clear_files_done(update, context):
     )
     return END
 
+def confirm_clear(update, context):
+    print('confirm_clear')
+    query = update.callback_query
+    user_selection = query.data
+
+    query.answer()
+
+    if user_selection == "Gucci":
+        group_id = query.message.chat_id
+        user_id = query.from_user.id
+        db.child('group').child(group_id).child('users').child(user_id).remove()
+
+        remove_text = "I have removed your data from my storage. Use /start to interact with me again :)"
+        query.edit_message_text(
+            text=remove_text
+        )
+    else:
+        query.edit_message_text(
+        text='Understood. Use /start to interact with our bot again :)'
+        )
+
+    return END
+
 def generate_clear_keyboard(filenamelist, rowsize):
     print('generate_clear_keyboard')
     keyboard = []
@@ -504,10 +535,21 @@ def find(update, context):
     # Check if query done from group or PM with bot
     query = update.callback_query
     chat_type = query.message.chat.type
-    context.chat_data['included'] = []
+
+    # Included ics strings
+    context.chat_data['included_ics'] = []
+
+    # Name to ID mappings of users -> tracks non-included users
     context.chat_data['name_id_map'] = {}
+
+    # Parameters provided by user during the search
     context.chat_data['params'] = {}
-    context.chat_data['included_filenames'] = []
+
+    # Filenames of files not included in search yet
+    context.chat_data['excluded_filenames'] = []
+
+    # Usernames of users included in search
+    context.chat_data['included_names'] = []
 
     query.answer()
 
@@ -520,7 +562,7 @@ def find(update, context):
 
         # Check if user_ids is empty
         if not raw_user_ids:
-            prompt_upload = "No data found :( Please use /start -> Upload first."
+            prompt_upload = 'No data found :( Please use /start -> "Upload a file" first.'
             query.edit_message_text(
                 text=prompt_upload
             )
@@ -566,7 +608,7 @@ def find(update, context):
         # Check if entry exists in db
         files = db.child('private').child(userid).child('files').get().val()
         if not files:
-            text = "No data found :( Please use /start -> Upload first."
+            text = 'No data found :( Please use /start -> "Upload a file" first.'
             query.edit_message_text(
                 text=text
             )
@@ -577,11 +619,11 @@ def find(update, context):
         
         for filename in temp_filenames:
             filedate = db.child('private').child(userid).child('files').child(filename).child('datecreated').get().val()
-            context.chat_data['included_filenames'].append('{} | {}'.format(filename, filedate))
+            context.chat_data['excluded_filenames'].append('{} | {}'.format(filename, filedate))
 
         # If entry doesn't exist
-        if not context.chat_data['included_filenames']:
-            prompt_upload = "No data found :( Please use /start -> Upload first."
+        if not context.chat_data['excluded_filenames']:
+            prompt_upload = 'No data found :( Please use /start -> "Upload a file" first.'
             
             query.edit_message_text(
                 text=prompt_upload
@@ -592,7 +634,7 @@ def find(update, context):
         keyboard = []
         rowcnt = 0
         row = []
-        for user in context.chat_data['included_filenames']:
+        for user in context.chat_data['excluded_filenames']:
             row.append(InlineKeyboardButton(text=user, callback_data=user))
             if rowcnt < 2:
                 rowcnt += 1
@@ -663,18 +705,28 @@ def find_persons_to_query(update, context):
             filename = user_selection.split(' | ')[0]
 
             # Pop user_selection from chat_data
-            context.chat_data['included_filenames'].remove(user_selection)
+            context.chat_data['excluded_filenames'].remove(user_selection)
+
+            # Store included filename
+            context.chat_data['included_names'].append(user_selection)
 
             # Add icalrep for given filename to included
             icalrep = db.child('private').child(group_id).child('files').child(filename).child('icalrep').get().val()
-            context.chat_data['included'].append(icalrep)
+            context.chat_data['included_ics'].append(icalrep)
 
             # Check if files left
-            files_left = context.chat_data['included_filenames']
+            files_left = context.chat_data['excluded_filenames']
 
             if files_left:
                 keyboard = generate_keyboard_from_userlist(files_left, 2)
-                prompt_for_next = "I have included {}. Select other files that you want to include.".format(user_selection)
+                
+                result = ''
+                names = context.chat_data['included_names']
+                for i in range(len(names)):
+                    temp = '{}) {}\n'.format(i + 1, names[i])
+                    result += temp
+
+                prompt_for_next = "I have included:\n{}\n Select other files that you want to include.".format(result)
                 query.edit_message_text(
                     text=prompt_for_next,
                     reply_markup=keyboard
@@ -705,10 +757,11 @@ def find_persons_to_query(update, context):
         else:
             # Retrieve user_id from username and remove user from mapping
             user_id = context.chat_data['name_id_map'].pop(user_selection)
+            context.chat_data['included_names'].append(user_selection)
 
             # Update included ics files
             ics_str = db.child('group').child(group_id).child('users').child(user_id).child('icalrep').get().val()
-            context.chat_data['included'].append(ics_str)
+            context.chat_data['included_ics'].append(ics_str)
 
             # Generate new keyboard from remaining users
             users_left = list(context.chat_data['name_id_map'].keys())
@@ -716,7 +769,12 @@ def find_persons_to_query(update, context):
             # Users left
             if users_left:
                 keyboard = generate_keyboard_from_userlist(users_left, 2)
-                prompt_for_next = "I have included {}. Select other files that you want to include.".format(user_selection)
+                result = ""
+                names = context.chat_data['included_names']
+                for i in range(len(names)):
+                    temp = "{}) {}\n".format(i + 1, names[i])
+                    result += temp
+                prompt_for_next = "I have included:\n{}\nSelect other files that you want to include.".format(result)
                 query.edit_message_text(
                     text=prompt_for_next,
                     reply_markup=keyboard
@@ -832,7 +890,7 @@ def find_min_interval(update, context):
         if parsed_interval > 24 or parsed_interval <= 0:
             raise ValueError
         context.chat_data['params']['interval'] = parsed_interval
-        result = process_result(find_free_time(context.chat_data['included'], context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
+        result = process_result(find_free_time(context.chat_data['included_ics'], context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
         result = "No free time :'(" if (result == "") else result
         context.bot.send_message(
             text=result,
@@ -875,10 +933,7 @@ def upload(update, context):
         query.edit_message_text(
             text=upload_text
         )
-        # context.bot.send_message(
-        #     text=upload_text,
-        #     chat_id=update.message.chat_id
-        # )
+
         return ON_DOC_UPLOAD
 
     # Case for group chat
@@ -974,10 +1029,17 @@ def on_doc_upload(update, context):
 
 def error(update, context):
     print(context.error)
+    chatid = update.message.chat_id
+
+    if update.callback_query:
+        update.callback_query.answer()
+        chatid = update.callback_query.message.chat_id
+
     context.bot.send_message(
         text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
-        chat_id = update.message.chat_id
+        chat_id = chatid
     )
+
 
 def aslocaltimestr(utc_dt):
     return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime('%Y/%m/%d %H:%M')
@@ -1007,7 +1069,8 @@ def main():
     clear_convo_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(clear, pattern='^' + str(CLEAR) + '$')],
         states={
-            CLEAR_FILES : [CallbackQueryHandler(clear_files_done, pattern='^Done$'), CallbackQueryHandler(clear_files)]
+            CLEAR_FILES : [CallbackQueryHandler(clear_files_done, pattern='^Done$'), CallbackQueryHandler(clear_files)],
+            CLEAR_CONFIRMATION : [CallbackQueryHandler(confirm_clear)]
         },
         fallbacks=[],
         map_to_parent={
