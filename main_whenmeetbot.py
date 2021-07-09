@@ -1105,16 +1105,23 @@ def on_doc_upload(update, context):
 
 def error(update, context):
     print(context.error)
-    chatid = update.message.chat_id
+    msg = update.message
 
-    if update.callback_query:
+    if not msg:
         update.callback_query.answer()
         chatid = update.callback_query.message.chat_id
 
-    context.bot.send_message(
-        text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
-        chat_id = chatid
-    )
+        context.bot.send_message(
+            text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
+            chat_id = chatid
+        )
+
+    else:
+        chatid = msg.chat_id
+        context.bot.send_message(
+            text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
+            chat_id = chatid
+        )
 
 def aslocaltimestr(utc_dt):
     return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime('%Y/%m/%d %H:%M')
