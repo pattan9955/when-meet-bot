@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+
 from telegram.ext.callbackqueryhandler import CallbackQueryHandler
 
 from telegram.inline.inlinekeyboardbutton import InlineKeyboardButton
@@ -34,8 +35,9 @@ from findtimes import *
     FIND_START,
     FIND_END,
     FIND_INT,
+    FIND_POLL,
     END
-) = map(chr, range(19))
+) = map(chr, range(20))
 
 # For deployment
 DB_TOKEN = os.environ.get("DB_TOKEN")
@@ -884,19 +886,44 @@ def process_result(res_dict):
 def find_min_interval(update, context):
     print('find_min_interval')
     user_input = update.message.text
+    chat_type = update.message.chat.type
 
     try:
         parsed_interval = int(user_input)
         if parsed_interval > 24 or parsed_interval <= 0:
             raise ValueError
         context.chat_data['params']['interval'] = parsed_interval
-        result = process_result(find_free_time(context.chat_data['included_ics'], context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval']))
-        result = "No free time :'(" if (result == "") else result
-        context.bot.send_message(
-            text=result,
-            chat_id=update.message.chat_id
-        )
-        return END
+        
+        # Store result
+        context.chat_data['result'] = find_free_time(context.chat_data['included_ics'], context.chat_data['params']['start'], context.chat_data['params']['end'], context.chat_data['params']['interval'])
+        
+        result = process_result(context.chat_data['result'])
+        
+        if result == "":
+            result = "No free time :'("
+            context.bot.send_message(
+                text=result,
+                chat_id=update.message.chat_id
+            )
+            return END
+
+        else:
+            context.bot.send_message(
+                text=result,
+                chat_id=update.message.chat_id
+            )
+            if chat_type == 'group' or chat_type == 'supergroup':
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="Yes", callback_data="Yes"), InlineKeyboardButton(text="No", callback_data="No")]
+                ])
+                context.bot.send_message(
+                    text="Do you want to generate a poll to vote for free times?",
+                    chat_id=update.message.chat_id,
+                    reply_markup=keyboard
+                )
+                return FIND_POLL
+            return END
+
     except ValueError:
         error_prompt = "I do not understand {}.\nPlease give me a minimum required interval (between 0 to 24).\nTo cancel, type '/cancel'.".format(user_input)
         context.bot.send_message(
@@ -904,6 +931,55 @@ def find_min_interval(update, context):
             chat_id=update.message.chat_id
         )
         return FIND_INT
+
+def generate_poll(update, context):
+    query = update.callback_query
+    user_selection = query.data
+    group_id = query.message.chat_id
+
+    query.answer()
+
+    if user_selection == "Yes":
+        options = make_options(context.chat_data['result'])
+        
+        query.edit_message_text(
+            text="Here's your poll as requested :D Use '/start' to interact with the bot again :)"
+        )
+        
+        context.bot.send_poll(
+            chat_id=group_id,
+            question="When are you free?",
+            options=options,
+            is_anonymous=False,
+            allows_multiple_answers=True
+        )
+
+        return END
+    else:
+        text = "Understood. Use '/start' to interact with the bot again :)"
+        query.edit_message_text(
+            text=text
+        )
+        return END
+
+def make_options(raw):
+    res = []
+    for dates,times in raw.items():
+        for time in times:
+            start = time[0] % 24
+            end = time[1] % 24
+            if start < 10:
+                start = '0{}00'.format(start)
+            else:
+                start = '{}00'.format(start)
+
+            if end < 10:
+                end = '0{}00'.format(end)
+            else:
+                end = '{}00'.format(end)
+            res.append('{}: {}hrs - {}hrs\n'.format(dates, start, end))
+
+    return res
 
 def upload(update, context):
     print('upload')
@@ -1040,7 +1116,6 @@ def error(update, context):
         chat_id = chatid
     )
 
-
 def aslocaltimestr(utc_dt):
     return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime('%Y/%m/%d %H:%M')
 
@@ -1083,9 +1158,10 @@ def main():
         entry_points=[CallbackQueryHandler(find, pattern='^' + str(FIND) + '$')],
         states={
             FIND_PERSONS : [CallbackQueryHandler(cancel_find_callback, pattern="^Cancel$"), CallbackQueryHandler(find_persons_to_query)],
-            FIND_START : [CommandHandler('cancel', cancel_find), MessageHandler(Filters.text, find_start_time)],
+            FIND_START : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_start_time)],
             FIND_END : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_end_time)],
-            FIND_INT : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_min_interval)]
+            FIND_INT : [CommandHandler("cancel", cancel_find), MessageHandler(Filters.text, find_min_interval)],
+            FIND_POLL : [CallbackQueryHandler(generate_poll)]
         },
         fallbacks=[],
         map_to_parent={
