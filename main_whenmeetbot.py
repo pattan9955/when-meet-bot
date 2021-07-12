@@ -31,13 +31,16 @@ from findtimes import *
     ON_DOC_UPLOAD,
     ASK_CONFIRMATION,
     SELECTION,
+    DOWNLOAD,
+    DOWNLOAD_SELECTION,
+    DOWNLOAD_CONFIRMATION,
     FIND_PERSONS,
     FIND_START,
     FIND_END,
     FIND_INT,
     FIND_POLL,
     END
-) = map(chr, range(20))
+) = map(chr, range(23))
 
 # For deployment
 DB_TOKEN = os.environ.get("DB_TOKEN")
@@ -73,6 +76,9 @@ def start(update, context):
             ], 
             [
                 InlineKeyboardButton(text='Clear files', callback_data=str(CLEAR)),
+                InlineKeyboardButton(text='Download files', callback_data=str(DOWNLOAD))
+            ],
+            [
                 InlineKeyboardButton(text='Exit', callback_data=str(END))
             ]
     ]
@@ -1103,6 +1109,195 @@ def on_doc_upload(update, context):
 
     return END
 
+def generate_filenames_keyboard(files, rowsize):
+    print('generate_filenames_keyboard')
+    keyboard = []
+    rowcnt = 0
+    row = []
+    for button in files:
+        row.append(InlineKeyboardButton(text=button, callback_data=button))
+        if rowcnt < rowsize:
+            rowcnt += 1
+        else:
+            rowcnt = 0
+            keyboard.append(copy.copy(row))
+            row = []
+    if len(row) != 0:
+        keyboard.append(copy.copy(row))
+    keyboard.append(
+        [
+            InlineKeyboardButton(text='Download All', callback_data='Download All'),
+            InlineKeyboardButton(text='Cancel', callback_data='Cancel')
+        ]
+    )
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def download(update, context):
+    query = update.callback_query
+    chat_type = query.message.chat.type
+
+    query.answer()
+
+    if chat_type == 'private':
+        user_id = query.from_user.id
+
+        files = db.child('private').child(user_id).child('files').get().val()
+
+        # If files don't exist
+        if not files:
+            query.edit_message_text(
+                text="You have no files uploaded :O Use '/start' to interact with the the bot again :)"
+            )
+            return END
+
+        files_namelist = [k for k,v in files.items()]
+
+        keyboard = generate_filenames_keyboard(files_namelist, 2)
+
+        query.edit_message_text(
+            text="Which file would you like to download?",
+            reply_markup=keyboard
+        )
+
+        return DOWNLOAD_SELECTION
+
+    elif chat_type == 'group' or chat_type == 'supergroup':
+        group_id = query.message.chat_id
+        user_id = query.from_user.id
+
+        date = db.child('group').child(group_id).child('users').child(user_id).child('dateupdated').get().val()
+
+        # File doesn't exist
+        if not date:
+            query.edit_message_text(
+                text="You have no files uploaded :O Use '/start' to interact with the the bot again :)"
+            )
+            return END
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text='Yes', callback_data='Yes'), 
+                InlineKeyboardButton(text='No', callback_data='No')
+            ]
+        ])
+        query.edit_message_text(
+            text="Would you like to download your .ics file uploaded on {}?".format(date),
+            reply_markup=keyboard
+        )
+
+        return DOWNLOAD_CONFIRMATION
+    
+    else:
+        query.edit_message_text(
+            text="Sorry, channels are not supported. Use '/start' to interact with the bot again :)"
+        )
+        return END
+
+def download_selection(update, context):
+    query = update.callback_query
+    user_selection = query.data
+    user_id = query.from_user.id
+
+    query.answer()
+
+    if user_selection == "Cancel":
+        query.edit_message_text(
+            text="Understood. Use '/start' to interact with the bot again :)"
+        )
+
+        return END
+
+    elif user_selection == "Download All":
+        file_dict = db.child('private').child(user_id).child('files').get().val()
+
+        query.edit_message_text(
+            text="Here are your files."
+        )
+
+        for filename,data in file_dict.items():
+            temp_filename = filename.replace('_', '.')
+            ical_data = data['icalrep']
+
+            with open(temp_filename, 'w') as f:
+                f.write(ical_data)
+            
+            context.bot.send_document(
+                chat_id=user_id,
+                document = open(temp_filename, 'r'),
+                filename=temp_filename
+            )
+
+            os.remove(temp_filename)
+
+        context.bot.send_message(
+            chat_id=user_id,
+            text="Use '/start' to interact with the bot again :)"
+        )
+
+        return END
+
+    else:
+        ical_data = db.child('private').child(user_id).child('files').child(user_selection).child('icalrep').get().val()
+        filename = user_selection.replace('_', '.')
+        
+        with open(filename, 'w') as f:
+            f.write(ical_data)
+
+        query.edit_message_text(
+            text="Here is your file."
+        )
+
+        context.bot.send_document(
+            chat_id=user_id,
+            document=open(filename, "r"),
+            filename=filename,
+            caption="Use '/start' to interact with the bot again :)"
+        )
+
+        os.remove(filename)
+
+        return END
+
+def download_confirmation(update, context):
+    query = update.callback_query
+    user_selection = query.data
+    group_id = query.message.chat_id
+    user_id = query.from_user.id
+
+    query.answer()
+
+    if user_selection == 'Yes':
+        ical_data = db.child('group').child(group_id).child('users').child(user_id).child('icalrep').get().val()
+        date = db.child('group').child(group_id).child('users').child(user_id).child('dateupdated').get().val()
+        date = date.replace('/', '-').replace(':', '')
+
+        filename = '{}.ics'.format(date)
+
+        with open(filename, 'w') as f:
+            f.write(ical_data)
+
+        query.edit_message_text(
+            text="Here is your file."
+        )
+
+        context.bot.send_document(
+            chat_id=group_id,
+            document=open(filename, "r"),
+            filename=filename,
+            caption="Use '/start' to interact with the bot again :)"
+        )
+
+        os.remove(filename)
+
+        return END
+
+    else:
+        query.edit_message_text(
+            text="Understood. Use '/start' to interact with the bot again :)"
+        )
+        return END
+
 def error(update, context):
     print(context.error)
     msg = update.message
@@ -1190,6 +1385,19 @@ def main():
         }
     )
 
+    # Download convo handler
+    download_convo_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(download, pattern='^' + str(DOWNLOAD) + '$')],
+        states={
+            DOWNLOAD_SELECTION : [CallbackQueryHandler(download_selection)],
+            DOWNLOAD_CONFIRMATION : [CallbackQueryHandler(download_confirmation)]
+        },
+        fallbacks=[],
+        map_to_parent={
+            END : END
+        }
+    )
+
     # Selection function
     select_handlers = [
             help_convo_handler,
@@ -1197,7 +1405,8 @@ def main():
             CallbackQueryHandler(end, pattern='^' + str(END) + '$'),
             find_convo_handler,
             clear_convo_handler,
-            upload_convo_handler
+            upload_convo_handler,
+            download_convo_handler
         ]
 
     # Add main conversation handler for user interaction
