@@ -863,29 +863,13 @@ def find_end_time(update, context):
 def process_result(res_dict):
     print('process_result')
     final = ""
-    for day,times in res_dict.items():
-        intermediate = ""
-        intermediate += day
-        intermediate += ':\n'
-
-        for time in times:
-            start = time[0] % 24
-            end = time[1] % 24
-            if start < 10:
-                start = '0{}00'.format(start)
-            else:
-                start = '{}00'.format(start)
-
-            if end < 10:
-                end = '0{}00'.format(end)
-            else:
-                end = '{}00'.format(end)
-            intermediate += '    {}hrs - {}hrs\n'.format(start, end)
-        
-        if intermediate == '{}:\n'.format(day):
-            continue
-        final += intermediate
-        final += '\n'
+    for date, intervals in res_dict.items():
+        final += date
+        final +=":\n"
+        for interval in intervals:
+            final += interval
+            final += "\n"
+        final += "\n"
 
     return final
 
@@ -897,6 +881,7 @@ def find_min_interval(update, context):
     try:
         parsed_interval = int(user_input)
         if parsed_interval > 24 or parsed_interval <= 0:
+            print('interval error')
             raise ValueError
         context.chat_data['params']['interval'] = parsed_interval
         
@@ -1096,18 +1081,21 @@ def on_doc_upload(update, context):
 
     if is_PM:
         db.child('private').child(user_id).child('files').update({filename:{'icalrep':content, 'datecreated':chat_dt}})
-
+        confirmation_prv = "{} has been successfully uploaded.\nUpload your next file or use '/cancel' to finish :)".format(filename)
+        context.bot.send_message(
+            text=confirmation_prv,
+            chat_id=group_id
+        )
+        return ON_DOC_UPLOAD
     else:
         db.child('group').child(group_id).child('users').child(user_id).update({'icalrep':content, 'dateupdated':chat_dt})
-
-    confirmation_grp = "{}'s file has been successfully uploaded.\nUse /start to interact with me again :)".format(update.message.from_user.username)
-    confirmation_prv = "{} has been successfully uploaded.\nUse /start to interact with me again :)".format(filename)
-    context.bot.send_message(
-        text=confirmation_prv if is_PM else confirmation_grp,
-        chat_id=group_id
-    )
-
-    return END
+        confirmation_grp = "{}'s file has been successfully uploaded.\nUse /start to interact with me again :)".format(update.message.from_user.username)
+        context.bot.send_message(
+            text=confirmation_grp,
+            chat_id=group_id
+        )
+        return END
+    
 
 def generate_filenames_keyboard(files, rowsize):
     print('generate_filenames_keyboard')
