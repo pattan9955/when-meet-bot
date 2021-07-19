@@ -148,12 +148,37 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
     if end_datetime <= start_datetime:
         raise ValueError
         
-    start_date = start_datetime.date()
     end_date = end_datetime.date()
+    end_hour = end_datetime.time().hour
 
+    # Extract time information from search params
+    start_hour = start_datetime.time().hour
+    start_date = start_datetime.date()
+    start_round_cond = start_datetime.time().minute > 0 or start_datetime.time().second > 0 or start_datetime.time().microsecond > 0
+    if start_round_cond:
+        start_hour = (start_datetime + timedelta(hours=1)).time().hour
+        start_date = (start_datetime + timedelta(hours=1)).date()
+
+    # Populate start date only with start time considerations
     free_time_dict = {}
-    for date in daterange(start_date, end_date + timedelta(days=1)):
+    free_time_dict[start_date] = []
+    for i in range(24):
+        if i < start_hour:
+            free_time_dict[start_date].append(False)
+        else:
+            free_time_dict[start_date].append(True)
+    
+    # Populate in between dates i.e. exclusive of start and end dates
+    for date in daterange(start_date + timedelta(days=1), end_date):
         free_time_dict[date] = [True for i in range(24)]
+
+    # Populate end date only with end time considerations
+    free_time_dict[end_date] = []
+    for i in range(24):
+        if i >= end_hour:
+            free_time_dict[end_date].append(False)
+        else:
+            free_time_dict[end_date].append(True)
 
     for event in events:
         event_start_date = event[0].date()
@@ -191,7 +216,7 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
 
     # for k,v in free_time_dict.items():
     #     print('{}:{}'.format(k,v))
-    # print(free_time_dict)
+    # print("\n")
     final_results = {}
 
     # Find intervals of min size provided
@@ -205,8 +230,9 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
         current_start = -1
         current_end = -1
         interval_cnt = 0
-        if not spills_over:
-            for i in range(24):
+
+        for i in range(24):
+            if not spills_over:
                 if timetable[i]:
                     if interval_cnt == 0:
                         current_start = i
@@ -218,8 +244,7 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
                     current_start = -1
                     current_end = -1
                     interval_cnt = 0
-        else:
-            for i in range(24):
+            else:
                 if timetable[i]:
                     if interval_cnt == 0:
                         current_start = i
@@ -228,7 +253,8 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
                     if (interval_cnt + spill_interval >= min_hourly_interval):
                         current_end = i
                         final_results[spill_date].append(temp)
-                        results.append((current_start, current_end))
+                        if interval_cnt > 0:
+                            results.append((current_start, current_end))
                     temp = None
                     spills_over = False
                     spill_interval = 0
@@ -236,7 +262,7 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
                     current_end = -1
                     interval_cnt = 0
         
-        if interval_cnt > 0 and current_end == -1:
+        if interval_cnt > 0 and current_end == -1 and not spills_over:
             temp = (current_start, 24)
             spills_over = True
             spill_interval = interval_cnt
@@ -244,12 +270,156 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
 
         final_results[str(date)] = results
 
-    return final_results
+    if temp:
+        final_results[spill_date].append(temp)
+
+    # print(final_results)
+    # print('\n')
+    return uwufy(final_results)
     # print(final_results)    
 
+def format_start_end(time):
+    start = time[0] % 24
+    end = time[1] % 24
+    
+    # Format start time
+    if start < 10:
+        start = '0{}00'.format(start)
+    else:
+        start = '{}00'.format(start)
+
+    # Format end time
+    if end < 10:
+        end = '0{}00'.format(end)
+    else:
+        end = '{}00'.format(end)
+
+    interval = "    {}hrs - {}hrs".format(start, end)
+
+    return interval
+
+def uwufy(raw):
+    # print('raw: {}'.format(raw))
+    if not raw:
+        return {}
+
+    result = {}
+    prev_time = None
+    prev_date = None
+    current_date = None
+    current_time = None
+
+    # Pre-populate result dict with empty lists, 
+    # strip out days with no results
+    for date,times in raw.items():
+        if times:
+            result[date] = []
+
+    for date,times in raw.items():
+        # If no free times for that day
+        if not times:
+            continue
+        
+        for time in times:
+            
+            # Catch cases where end time is at 2400hrs
+            # Sub cases caught: 
+            # 1) if whole day free i.e. (0,24)
+            # 2) partial day free i.e. (5,24) -> may spill over to next day, may also end current spill over
+            #   at prev date/time if any
+            if time[1] == 24:
+                if prev_date and prev_time:
+                    if time[0] == 0:
+                        current_date = date
+                        current_time = time
+                    else:
+                        if current_date and current_time:
+                            temp = format_start_end((prev_time[0], current_time[1]))
+                            temp += " ({})".format(current_date)
+                            result[prev_date].append(temp)
+                            current_date, current_time = None, None 
+                        else:
+                            result[prev_date].append(format_start_end(prev_time))
+                        prev_time = time
+                        prev_date = date
+                    break
+                prev_time = time
+                prev_date = date
+            
+            # Catch cases where start time is 0000hrs but does not end at 2400hrs
+            # i.e. is a valid interval on its own or ends a spillover
+            elif time[0] == 0:
+                if prev_time and prev_date:
+                    temp = format_start_end((prev_time[0],time[1]))
+                    temp += " ({})".format(date)
+                    result[prev_date].append(temp)
+                    prev_time = None
+                    prev_date = None
+                else:
+                    result[date].append(format_start_end(time))
+
+            # Catches any other valid interval i.e. does not start at 0000hrs or end at 2400hrs
+            else:
+                # Handles any previous spillovers
+                if prev_time and prev_date:
+                    if current_date and current_time:
+                        temp = format_start_end((prev_time[0], current_time[1]))
+                        temp += " ({})".format(current_date)
+                        result[prev_date].append(temp)
+                        prev_date, prev_time, current_date, current_time = None, None, None, None
+
+                    # Catches cases where previous supposed spillover was just a valid interval by itself
+                    else:
+                        result[prev_date].append(format_start_end(prev_time))
+                        prev_date = None
+                        prev_time = None
+                
+                # Add current interval
+                result[date].append(format_start_end(time))
+
+    # Accounts for remaining supposed spillovers at the end
+    if prev_date and prev_time:
+        if current_date and current_time:
+            if current_time[0] == 0:
+                temp = format_start_end((prev_time[0], current_time[1]))
+                temp += " ({})".format(current_date)
+                result[prev_date].append(temp)
+            else:
+                result[prev_date].append(format_start_end(prev_time))
+                result[current_date].append(format_start_end(current_time))
+
+        else:
+            result[prev_date].append(format_start_end(prev_time))
+
+    final = {}
+    # Clean up empty dates
+    for date, times in result.items():
+        if times:
+            final[date] = times
+
+    return final
+
 if __name__ == '__main__':
-    start = datetime(2021, 3, 15, 0, 0, 0)
-    end = datetime(2021, 3, 21, 23, 0, 0)
-    # print(new_parse_output_ics(fel_str, start, end))
-    # print(find_free_time([fel_str], start, end, 5))
-    # print('\n' + str(find_free_time([MALC_STR, FEL_STR], start, end, 14)))
+    start = datetime(2021, 3, 22, 0, 0, 0)
+    end = datetime(2021, 3, 27, 0, 30, 0)
+    # print(str(find_free_time([PAT_STR, NAY_STR], start, end, 3)))
+
+    # test1 = {
+    #     '1' : [(2,3), (17,24)],
+    #     '2' : [(4,24)]
+    # }
+
+    # test2 = {
+    #     '1' : [(2,3), (5,24)],
+    #     '2' : [(0,24)],
+    #     '3' : [(0,24)],
+    #     '4' : [(5,24)]
+    # }
+
+    # test3 = {
+    #     '1' : [(0,12)],
+    #     '2' : [(0,24)],
+    #     '3' : [(0,4), (11,24)]
+    # }
+
+    # print(uwufy(test4))
