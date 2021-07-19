@@ -957,19 +957,7 @@ def make_options(raw):
     res = []
     for dates,times in raw.items():
         for time in times:
-            start = time[0] % 24
-            end = time[1] % 24
-            if start < 10:
-                start = '0{}00'.format(start)
-            else:
-                start = '{}00'.format(start)
-
-            if end < 10:
-                end = '0{}00'.format(end)
-            else:
-                end = '{}00'.format(end)
-            res.append('{}: {}hrs - {}hrs\n'.format(dates, start, end))
-
+            res.append('{}: {}\n'.format(dates, time.strip()))
     return res
 
 def upload(update, context):
@@ -1095,7 +1083,6 @@ def on_doc_upload(update, context):
             chat_id=group_id
         )
         return END
-    
 
 def generate_filenames_keyboard(files, rowsize):
     print('generate_filenames_keyboard')
