@@ -1121,7 +1121,7 @@ def download(update, context):
 
         files_namelist = [k for k,v in files.items()]
 
-        keyboard = generate_keyboard(files_namelist, 2, ['Download All', 'Cancel'])
+        keyboard = generate_keyboard(files_namelist, 2, ['Download All', 'Cancel', 'Merge All'])
 
         query.edit_message_text(
             text="Which file would you like to download?",
@@ -1177,26 +1177,53 @@ def download_selection(update, context):
         return END
 
     elif user_selection == "Download All":
-        file_dict = db.child('private').child(user_id).child('files').get().val()
+        file_dict = db.child("private").child(user_id).child("files").get().val()
 
         query.edit_message_text(
             text="Here are your files."
         )
 
         for filename,data in file_dict.items():
-            temp_filename = filename.replace('_', '.')
-            ical_data = data['icalrep']
+            temp_filename = filename.replace("_", ".")
+            ical_data = data["icalrep"]
 
-            with open(temp_filename, 'w', encoding="latin-1") as f:
+            with open(temp_filename, "w", encoding="latin-1") as f:
                 f.write(ical_data)
             
             context.bot.send_document(
                 chat_id=user_id,
-                document = open(temp_filename, 'r', encoding="latin-1"),
+                document = open(temp_filename, "r", encoding="latin-1"),
                 filename=temp_filename
             )
 
             os.remove(temp_filename)
+
+        context.bot.send_message(
+            chat_id=user_id,
+            text="Use '/start' to interact with the bot again :)"
+        )
+
+        return END
+
+    elif user_selection == "Merge All":
+        file_dict = db.child("private").child(user_id).child("files").get().val()
+
+        ics_strs = []
+        for filename,data in file_dict.items():
+            ics_strs.append(data["icalrep"])
+
+        merged_ics = merge_ics(ics_strs)
+
+        with open("merged.ics", "w", encoding="latin-1") as f:
+            f.write(merged_ics)
+
+        context.bot.send_document(
+            chat_id=user_id,
+            document=open("merged.ics", "r", encoding="latin-1"),
+            filename="merged.ics"
+        )
+
+        os.remove("merged.ics")
 
         context.bot.send_message(
             chat_id=user_id,
