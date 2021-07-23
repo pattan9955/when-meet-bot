@@ -941,7 +941,15 @@ def find_min_interval(update, context):
                 text=result,
                 chat_id=update.message.chat_id
             )
-            if chat_type == 'group' or chat_type == 'supergroup':
+
+            # Check result count
+            result_cnt = 0
+            temp = context.chat_data['result']
+            for date, times in temp.items():
+                for time in times:
+                    result_cnt += 1
+
+            if chat_type == 'group' or chat_type == 'supergroup' and result_cnt > 1:
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Yes", callback_data="Yes"), InlineKeyboardButton(text="No", callback_data="No")]
                 ])
@@ -951,6 +959,11 @@ def find_min_interval(update, context):
                     reply_markup=keyboard
                 )
                 return FIND_POLL
+            
+            context.bot.send_message(
+                text="Use '/start' to interact with the bot again :)",
+                chat_id=update.message.chat_id 
+            )
             return END
 
     except ValueError:
