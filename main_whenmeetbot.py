@@ -883,7 +883,7 @@ def find_end_time(update, context):
     try:
         parsed_date = datetime.strptime(user_input, "%d/%m/%Y %H:%M")
         context.chat_data['params']['end'] = parsed_date
-        prompt_end_time = "You have provided an end time.\nPlease give me a minimum required interval (between 0 to 24).\nTo cancel, type '/cancel'."
+        prompt_end_time = "You have provided an end time.\nPlease give me a minimum required interval (between 1 to 24).\nTo cancel, type '/cancel'."
         context.bot.send_message(
             text=prompt_end_time,
             chat_id=update.message.chat_id
@@ -967,7 +967,7 @@ def find_min_interval(update, context):
             return END
 
     except ValueError:
-        error_prompt = "I do not understand {}.\nPlease give me a minimum required interval (between 0 to 24).\nTo cancel, type '/cancel'.".format(user_input)
+        error_prompt = "I do not understand {}.\nPlease give me a minimum required interval (between 1 to 24).\nTo cancel, type '/cancel'.".format(user_input)
         context.bot.send_message(
             text=error_prompt,
             chat_id=update.message.chat_id
