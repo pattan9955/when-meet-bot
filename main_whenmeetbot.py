@@ -153,12 +153,14 @@ def faq_selection(update, context):
         "1) View files - Lists out all files stored for that particular chat.\n\n"
         "2) Upload a file - Allows the user to upload a file to the bot. Click the button below for more information.\n\n"
         "3) Find free times - Searches for common free times amongst selected .ics files/users. Click the button below for more information.\n\n"
-        "4) Clear files - Deletes previously uploaded files by the user. Click the button below for more information.\n\n")
+        "4) Clear files - Deletes previously uploaded files by the user. Click the button below for more information.\n\n"
+        "5) Download files - Allows the user to download a previously uploaded file to the bot. Click the button below for more information.\n\n")
         
         keyboard = [
             [InlineKeyboardButton(text="How do I use 'Upload a file'?", callback_data='HELP_UPLOAD')],
             [InlineKeyboardButton(text="How do I use 'Find free times'?", callback_data='HELP_FIND')],
             [InlineKeyboardButton(text="How do I use 'Clear files'?", callback_data="HELP_CLEAR")],
+            [InlineKeyboardButton(text="How do I use 'Download files'?", callback_data="HELP_DOWNLOAD")],
             [InlineKeyboardButton(text="Go back", callback_data="BACK")],
             [InlineKeyboardButton(text="Cancel", callback_data="END")]
         ]
@@ -259,26 +261,45 @@ def faq_command_selector(update, context):
         "  > These represent the search interval for the bot, so only free times in this interval will be displayed.\n\n"
         "5) The bot will then ask for an interval (in hours) between 0 to 24.\n"
         "  > This represents the minimum time interval for a block of free time to be considered valid.\n\n"
-        "6) Use the 'Cancel' button or the '/cancel' command, whichever is available, to cancel the operation.\n\n\n"
+        "6) After displaying the result, the bot will ask if the user wants to generate a poll (if in group chat) for others to vote on preferred timings.\n\n"
+        "7) Use the 'Cancel' button or the '/cancel' command, whichever is available, to cancel the operation at any time.\n\n\n"
         "Use the /start command to interact with the bot again :)")
 
         query.edit_message_text(
             text=help_find_text
         )
         return END
+    elif user_selection == "HELP_DOWNLOAD":
+        download_help = ("Group Chat:\n\n"
+        "The 'Download files' button will prompt the user for confirmation if he wants to download the file previously uploaded by that same user.\n\n\n"
+        "Private Message:\n\n"
+        "The 'Download files' button will provide the user with a menu of previously uploaded files, along with an option to 'Download All' or 'Merge All'.\n"
+        "The 'Download All' option will download all files previously uploaded by the user.\n\n"
+        "The 'Merge All' option will generate a single ics file that contains ALL events from ALL previously uploaded files.\n"
+        "This is for users who use multiple calendars and need to merge their calendars into a single calendar file.\n\n\n"
+        "Use /start to interact with the bot again :)")
+
+        query.edit_message_text(
+            text=download_help
+        )
+        return END
     elif user_selection == "HELP_UPLOAD":
-        upload_help = ("Groups allow only 1 file per user, whereas PM allows multiple files for the user.\n\n"
+        upload_help = ("Group Chat:\n\n"
+        "Groups allow only 1 file per user.\n" 
         "If you have a previously uploaded file in a group, the bot will ask if you want to overwrite the file.\n\n\n"
+        "Private Message:\n\n"
+        "PM allows the user to upload multiple files.\n"
+        "The user can upload a single .ics files to the bot.\n"
+        "After each successful upload, the bot will prompt for the next .ics file to be uploaded, until stopped with '/cancel'.\n\n\n"
         "Use /start to interact with the bot again :)")
 
         query.edit_message_text(
             text=upload_help
         )
         return END
-
     else:
         clear_help = ("Group Chat:\n\nThe 'Clear files' button will clear only the file previously uploaded by the user running the command.\n"
-        "Other users' files will remain intact.\n\n\n"
+        "Other users' files will remain intact.\nIf run by a group administrator, the admin can choose to clear other users' files.\n\n\n"
         "Private Message:\n\nThe 'Clear files' button will open a menu containing files that the user has previously uploaded.\n"
         "Select the file you wish to delete. Use the 'Clear All' button to delete all stored files.\n"
         "Use the 'Done' button when you are done deleting your desired files.\n\n\n"
