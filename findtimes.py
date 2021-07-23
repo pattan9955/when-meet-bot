@@ -147,6 +147,11 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
     # Check for case where end_datetime less than start_datetime
     if end_datetime <= start_datetime:
         raise ValueError
+
+    # Define timezone object for SG timing
+    sgt = pytz.timezone('Asia/Singapore')
+    start_datetime = sgt.localize(start_datetime)
+    end_datetime = sgt.localize(end_datetime)
         
     end_date = end_datetime.date()
     end_hour = end_datetime.time().hour
@@ -190,6 +195,9 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
         if cond:
             event[1] = event[1] + timedelta(hours=1)
         
+            if event[1] > end_datetime:
+                event[1] = end_datetime
+
         event_end_time = event[1].time().hour
         event_end_date = event[1].date()
 
@@ -400,9 +408,9 @@ def uwufy(raw):
     return final
 
 if __name__ == '__main__':
-    start = datetime(2021, 3, 22, 0, 0, 0)
-    end = datetime(2021, 3, 27, 0, 30, 0)
-    # print(str(find_free_time([PAT_STR, NAY_STR], start, end, 3)))
+    start = datetime(2021, 8, 2, 0, 0, 0)
+    end = datetime(2021, 8, 8, 23, 59, 0)
+    print(str(find_free_time([PAT_STR, GAV_STR], start, end, 5)))
 
     # test1 = {
     #     '1' : [(2,3), (17,24)],
