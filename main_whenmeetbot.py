@@ -197,7 +197,7 @@ def faq_purpose_selector(update, context):
     elif user_selection ==  "BACK":
         keyboard = [
             [InlineKeyboardButton(text='How does the bot work?', callback_data='PURPOSE')],
-            [InlineKeyboardButton(text='How do I an export an .ics file from my calendar app?', callback_data='EXPORT')],
+            [InlineKeyboardButton(text='How do I export an .ics file from my calendar app?', callback_data='EXPORT')],
             [InlineKeyboardButton(text='How do I use the commands?', callback_data='COMMAND')],
             [InlineKeyboardButton(text='Cancel', callback_data='END')]
         ]
