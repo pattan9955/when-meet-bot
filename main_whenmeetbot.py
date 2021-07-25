@@ -62,8 +62,6 @@ config = {
 firebase = pyrebase.initialize_app(config)
 db = firebase.database()
 
-# Configure logger
-# logging.basicConfig()
 
 def start(update, context):
     buttons = [
@@ -949,7 +947,7 @@ def find_min_interval(update, context):
                 for time in times:
                     result_cnt += 1
 
-            if chat_type == 'group' or chat_type == 'supergroup' and result_cnt > 1:
+            if chat_type == 'group' or chat_type == 'supergroup' and result_cnt > 1 and result_cnt <= 10:
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Yes", callback_data="Yes"), InlineKeyboardButton(text="No", callback_data="No")]
                 ])
@@ -1259,8 +1257,7 @@ def download_selection(update, context):
 
         os.remove("merged.ics")
 
-        context.bot.send_message(
-            chat_id=user_id,
+        query.edit_message_text(
             text="Use '/start' to interact with the bot again :)"
         )
 
@@ -1336,14 +1333,14 @@ def error(update, context):
         chatid = update.callback_query.message.chat_id
 
         context.bot.send_message(
-            text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
+            text="ERROR! Please try again later.",
             chat_id = chatid
         )
 
     else:
         chatid = msg.chat_id
         context.bot.send_message(
-            text="ERROR! Bot-chan itai! Plz don't do that kudasai ><",
+            text="ERROR! Please try again later.",
             chat_id = chatid
         )
 
