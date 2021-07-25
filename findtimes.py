@@ -1,28 +1,9 @@
 import icalendar
+import calendar
 from datetime import datetime, timedelta, date
-import copy
-# from intervaltree import Interval, IntervalTree
 import recurring_ical_events
 import pytz
 # from testfiles import *
-
-# class Event():
-    # '''
-    # Constructor for an event. Event should contain a starting datetime, an ending datetime and a string representation
-    # of the event as defined in the .ics file.
-
-    # Events are ordered by their start_datetime
-    # '''
-    # def __init__(self, start_datetime, end_datetime, string_rep, is_recurring, EXDATE_ls, recur_rules) -> None:
-    #     self.start_datetime  = start_datetime
-    #     self.end_datetime = end_datetime
-    #     self.string_rep = string_rep
-
-    # def __repr__(self) -> str:
-    #     return repr((self.start_datetime, self.end_datetime, self.string_rep))
-
-    # def __eq__(self, other) -> bool:
-    #     self.start_datetime == other.start_datetime
 
 def merge_ics(incoming_ics):
     '''
@@ -97,9 +78,12 @@ def new_parse_output_ics(cal_str, start_datetime, end_datetime):
 
         if isinstance(temp_start, date) and not isinstance(temp_start, datetime):
             temp_start = datetime(temp_start.year, temp_start.month, temp_start.day)
+            # print("temp_start: {}".format(temp_start))
+
         if isinstance(temp_end, date) and not isinstance(temp_end, datetime):
             temp_end = datetime(temp_end.year, temp_end.month, temp_end.day)
-            temp_end += timedelta(1)
+            # print("temp_end: {}".format(temp_end))
+            # temp_end += timedelta(1)
 
         # Convert event start and end times to SG timing
         temp_start = temp_start.astimezone(sgt)
@@ -228,10 +212,9 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
     final_results = {}
 
     # Find intervals of min size provided
-    temp = None
+    spill_tank = []
     spills_over = False
     spill_interval = 0
-    spill_date = None
 
     for date, timetable in free_time_dict.items():
         results = []
@@ -260,35 +243,54 @@ def find_free_time(input_ics_strs, start_datetime, end_datetime, min_hourly_inte
                 else:
                     if (interval_cnt + spill_interval >= min_hourly_interval):
                         current_end = i
-                        final_results[spill_date].append(temp)
+
+                        for spill in spill_tank:
+                            spill_date = spill[0]
+                            spill_time = spill[1]
+                            final_results[spill_date].append(spill_time)
+
                         if interval_cnt > 0:
                             results.append((current_start, current_end))
-                    temp = None
+
+                    spill_tank = []
                     spills_over = False
                     spill_interval = 0
                     current_start = -1
                     current_end = -1
                     interval_cnt = 0
         
-        if interval_cnt > 0 and current_end == -1 and not spills_over:
-            temp = (current_start, 24)
-            spills_over = True
-            spill_interval = interval_cnt
-            spill_date = str(date)
+        if interval_cnt > 0 and current_end == -1:
+            if not spills_over:
+                formatted_date = date.strftime("%d-%m-%Y") + " (" + calendar.day_name[date.weekday()] + ")"   
+                spill_tank.append([formatted_date,(current_start, 24)])
+                spills_over = True
+                spill_interval = interval_cnt
 
-        final_results[str(date)] = results
+            else:
+                spill_interval += interval_cnt
+                formatted_date = date.strftime("%d-%m-%Y") + " (" + calendar.day_name[date.weekday()] + ")"   
+                spill_tank.append([formatted_date,(current_start, 24)])
 
-    if temp:
-        final_results[spill_date].append(temp)
+        formatted_date = date.strftime("%d-%m-%Y") + " (" + calendar.day_name[date.weekday()] + ")" 
+        final_results[formatted_date] = results
+
+    if spill_tank:
+        for spill in spill_tank:
+            spill_date = spill[0]
+            spill_time = spill[1]
+            final_results[spill_date].append(spill_time)
 
     # print(final_results)
     # print('\n')
-    return uwufy(final_results)
+    return result_formatter(final_results)
     # print(final_results)    
 
 def format_start_end(time):
-    start = time[0] % 24
-    end = time[1] % 24
+    # start = time[0] % 24
+    # end = time[1] % 24
+
+    start = time[0]
+    end = time[1]
     
     # Format start time
     if start < 10:
@@ -302,11 +304,11 @@ def format_start_end(time):
     else:
         end = '{}00'.format(end)
 
-    interval = "    {}hrs - {}hrs".format(start, end)
+    interval = "    {}hrs to {}hrs".format(start, end)
 
     return interval
 
-def uwufy(raw):
+def result_formatter(raw):
     # print('raw: {}'.format(raw))
     if not raw:
         return {}
@@ -326,6 +328,16 @@ def uwufy(raw):
     for date,times in raw.items():
         # If no free times for that day
         if not times:
+            # Check if interval of spillover is within provided min interval
+            if prev_time and prev_date:
+                if current_date and current_time:
+                    temp = format_start_end((prev_time[0], current_time[1]))
+                    temp += ", {}".format(current_date)
+                    result[prev_date].append(temp)
+                    current_date, current_time = None, None 
+                else:
+                    result[prev_date].append(format_start_end(prev_time))
+                prev_time, prev_date = None, None
             continue
         
         for time in times:
@@ -343,7 +355,7 @@ def uwufy(raw):
                     else:
                         if current_date and current_time:
                             temp = format_start_end((prev_time[0], current_time[1]))
-                            temp += " ({})".format(current_date)
+                            temp += ", {}".format(current_date)
                             result[prev_date].append(temp)
                             current_date, current_time = None, None 
                         else:
@@ -359,10 +371,10 @@ def uwufy(raw):
             elif time[0] == 0:
                 if prev_time and prev_date:
                     temp = format_start_end((prev_time[0],time[1]))
-                    temp += " ({})".format(date)
+                    temp += ", {}".format(date)
                     result[prev_date].append(temp)
-                    prev_time = None
-                    prev_date = None
+                    prev_time, prev_date, current_time, current_date = None, None, None, None
+                    
                 else:
                     result[date].append(format_start_end(time))
 
@@ -372,7 +384,7 @@ def uwufy(raw):
                 if prev_time and prev_date:
                     if current_date and current_time:
                         temp = format_start_end((prev_time[0], current_time[1]))
-                        temp += " ({})".format(current_date)
+                        temp += ", {}".format(current_date)
                         result[prev_date].append(temp)
                         prev_date, prev_time, current_date, current_time = None, None, None, None
 
@@ -390,7 +402,7 @@ def uwufy(raw):
         if current_date and current_time:
             if current_time[0] == 0:
                 temp = format_start_end((prev_time[0], current_time[1]))
-                temp += " ({})".format(current_date)
+                temp += ", {}".format(current_date)
                 result[prev_date].append(temp)
             else:
                 result[prev_date].append(format_start_end(prev_time))
@@ -408,26 +420,123 @@ def uwufy(raw):
     return final
 
 if __name__ == '__main__':
-    start = datetime(2021, 8, 2, 0, 0, 0)
-    end = datetime(2021, 8, 8, 23, 59, 0)
-    print(str(find_free_time([PAT_STR, GAV_STR], start, end, 5)))
+    
+    '''
+    find_free_time test cases
+    '''
+    # start = datetime(2021, 5, 12, 0, 0, 0)
+    # end = datetime(2021, 5, 16, 0, 0, 0)
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 14)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 1)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 51)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 52)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 20)))
 
-    # test1 = {
-    #     '1' : [(2,3), (17,24)],
-    #     '2' : [(4,24)]
-    # }
+    # start = datetime(2021, 5, 10, 0, 0, 0)
+    # end = datetime(2021, 5, 20, 0, 0, 0)
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 14)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 48)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 72)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 1)))
+    # print(str(find_free_time([PAT_NUS_STR, NAY_NUS_STR, FEL_NEW_STR], start, end, 24)))
 
-    # test2 = {
-    #     '1' : [(2,3), (5,24)],
-    #     '2' : [(0,24)],
-    #     '3' : [(0,24)],
-    #     '4' : [(5,24)]
-    # }
+    # start = datetime(2021, 5, 10, 0, 0, 0)
+    # end = datetime(2021, 5, 20, 0, 0, 0)
+    # print(str(find_free_time([JIAZ_STR, NAY_NUS_STR, FEL_NEW_STR, GAV_STR], start, end, 14)))
+    # print(str(find_free_time([JIAZ_STR, NAY_NUS_STR, FEL_NEW_STR, GAV_STR], start, end, 48)))
+    # print(str(find_free_time([JIAZ_STR, NAY_NUS_STR, FEL_NEW_STR, GAV_STR], start, end, 72)))
+    # print(str(find_free_time([JIAZ_STR, NAY_NUS_STR, FEL_NEW_STR, GAV_STR], start, end, 1)))
+    # print(str(find_free_time([JIAZ_STR, NAY_NUS_STR, FEL_NEW_STR, GAV_STR], start, end, 24)))
 
-    # test3 = {
-    #     '1' : [(0,12)],
-    #     '2' : [(0,24)],
-    #     '3' : [(0,4), (11,24)]
-    # }
+    # start = datetime(2021, 5, 28, 0, 0, 0)
+    # end = datetime(2021, 6, 1, 0, 0, 0)
+    # print(str(find_free_time([NAY_NUS_STR, FEL_NEW_STR, PAT_NUS_STR], start, end, 1)))
 
-    # print(uwufy(test4))
+    # start = datetime(2021, 6, 27, 0, 0, 0)
+    # end = datetime(2021, 6, 30, 0, 0, 0)
+    # print(str(find_free_time([NAY_NUS_STR, FEL_NEW_STR, PAT_NUS_STR], start, end, 1)))
+
+
+    '''
+    result_formatter test cases
+    '''
+    test1 = {
+        '1' : [(2,3), (17,24)],
+        '2' : [(4,24)]
+    } 
+    # {'1': ['    0200hrs - 0300hrs', '    1700hrs - 2400hrs'], '2': ['    0400hrs - 2400hrs']}
+
+    test2 = {
+        '1' : [(2,3), (5,24)],
+        '2' : [(0,24)],
+        '3' : [(0,24)],
+        '4' : [(5,24)]
+    }
+    # {'1': ['    0200hrs - 0300hrs', '    0500hrs - 2400hrs (3)'], '4': ['    0500hrs - 2400hrs']}
+
+    test3 = {
+        '1' : [(0,12)],
+        '2' : [(0,24)],
+        '3' : [(0,4), (11,24)]
+    }
+    # {'1': ['    0000hrs - 1200hrs'], '2': ['    0000hrs - 0400hrs (3)'], '3': ['    1100hrs - 2400hrs']}
+
+    test4 = {
+        '1' : [(0,24)],
+        '2' : [(0,24)],
+        '3' : [],
+        '4' : [(1,4), (5,8)]
+    }
+    # {'1': ['    0000hrs - 2400hrs (2)'], '4': ['    0100hrs - 0400hrs', '    0500hrs - 0800hrs']}
+
+    test5 = {
+        '1' : [(0,24)],
+        '2' : [],
+        '3' : [],
+        '4' : [(1,4), (5,8)]
+    }
+    # {'1': ['    0000hrs - 2400hrs'], '4': ['    0100hrs - 0400hrs', '    0500hrs - 0800hrs']}
+
+    test6 = {
+        '1' : [(0,24)],
+        '2' : [],
+        '3' : [(5,24)],
+        '4' : [],
+        '5' : [(1,4), (5,8)]
+    }
+    # {'1': ['    0000hrs - 2400hrs'], '3': ['    0500hrs - 2400hrs'], '5': ['    0100hrs - 0400hrs', '    0500hrs - 0800hrs']}
+
+    test7 = {
+        '1' : [(0,24)],
+        '2' : [],
+        '3' : [(5,24)],
+        '4' : [(0,1)],
+        '5' : [(1,4), (5,8)]
+    }
+    # {'1': ['    0000hrs - 2400hrs'], '3': ['    0500hrs - 0100hrs (4)'], '5': ['    0100hrs - 0400hrs', '    0500hrs - 0800hrs']}
+
+    test8 = {
+        '1' : [(5,24)],
+        '2' : [(0,3), (19,24)],
+        '3' : [],
+        '4' : [(0,24)],
+        '5' : [(0,24)]
+    }
+    # {'1': ['    0500hrs - 0300hrs (2)'], '2': ['    1900hrs - 2400hrs'], '4': ['    0000hrs - 2400hrs (5)']}
+
+    test9 = {
+        '1' : [(0,24)],
+        '2' : [(0,24)],
+        '3' : [],
+        '4' : []
+    }
+    # {'1': ['    0000hrs - 2400hrs (2)']}
+
+    test10 = {
+        '1' : [(0, 24)],
+        '2' : [(0, 24)], 
+        '3' : [(0, 14), (17, 24)]
+    }
+    # {'1': ['    0000hrs - 1400hrs (3)'], '3': ['    1700hrs - 2400hrs']}
+
+    # print(result_formatter(test1))
