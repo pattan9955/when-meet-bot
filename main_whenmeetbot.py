@@ -7,7 +7,7 @@ from telegram.inline.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, Filters
 
 # For testing purposes
-# from secret_token import TEST_TOKEN, DB_TOKEN
+from secret_token import TEST_TOKEN, DB_TOKEN
 
 import pyrebase
 import os
@@ -44,11 +44,11 @@ from findtimes import *
 ) = map(chr, range(24))
 
 # For deployment
-DB_TOKEN = os.environ.get("DB_TOKEN")
-TOKEN = os.environ.get("TOKEN")
+# DB_TOKEN = os.environ.get("DB_TOKEN")
+# TOKEN = os.environ.get("TOKEN")
 
 # For testing
-# TOKEN = TEST_TOKEN
+TOKEN = TEST_TOKEN
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
@@ -669,7 +669,9 @@ def find(update, context):
             
         if len(row) != 0:
             keyboard.append(copy.copy(row))
-        keyboard.append([InlineKeyboardButton(text='Done', callback_data='Done'), InlineKeyboardButton(text='Cancel', callback_data='Cancel')])
+        keyboard.append([InlineKeyboardButton(text='Done', callback_data='Done'), 
+            InlineKeyboardButton(text='Cancel', callback_data='Cancel'),
+            InlineKeyboardButton(text="Select All", callback_data='Select All')])
         keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard)
 
         prompt = "Select who you want to include in the query."
@@ -708,7 +710,7 @@ def find(update, context):
             )
             return END
         
-        keyboard = generate_keyboard(context.chat_data['excluded_filenames'], 2, ['Cancel'])
+        keyboard = generate_keyboard(context.chat_data['excluded_filenames'], 2, ['Cancel', 'Select All'])
 
         prompt = "Select which files you want to include in the query."
         query.edit_message_text(
@@ -743,6 +745,26 @@ def find_persons_to_query(update, context):
 
             return FIND_START
 
+        # User chooses select all
+        elif user_selection == 'Select All':
+            # Reset included ics
+            context.chat_data['included_ics'] = []
+
+            # Get all files from db
+            all_files = db.child('private').child(group_id).child('files').get().val()
+
+            # Add all ics str for processing
+            for filename, data in all_files.items():
+                icalrep = data['icalrep']
+                context.chat_data['included_ics'].append(icalrep)
+            
+            prompt_for_next = "I see you've added all your files already.\nPlease give me a start date to search from in the format:\nDD/MM/YYYY HH:MM\nTo cancel, type '/cancel'."
+            query.edit_message_text(
+                text=prompt_for_next
+            )
+
+            return FIND_START
+
         # Valid user input
         else:
             # Parse user input for file name
@@ -762,7 +784,7 @@ def find_persons_to_query(update, context):
             files_left = context.chat_data['excluded_filenames']
 
             if files_left:
-                keyboard = generate_keyboard(files_left, 2, ['Done', 'Cancel'])
+                keyboard = generate_keyboard(files_left, 2, ['Done', 'Cancel', 'Select All'])
                 
                 result = ''
                 names = context.chat_data['included_names']
@@ -797,6 +819,25 @@ def find_persons_to_query(update, context):
 
             return FIND_START
 
+        # User chooses select all
+        elif user_selection == 'Select All':
+            # Reset included ics
+            context.chat_data['included_ics'] = []
+
+            # Get all files from db
+            all_files = db.child('group').child(group_id).child('users').get().val()
+
+            for userid, data in all_files.items():
+                icalrep = data['icalrep']
+                context.chat_data['included_ics'].append(icalrep)
+
+            prompt_for_next = "I see you've added all your friends already.\nPlease give me a start date to search from in the format:\nDD/MM/YYYY HH:MM\nTo cancel, type '/cancel'."
+            query.edit_message_text(
+                text=prompt_for_next
+            )
+
+            return FIND_START
+
         # Definitely valid user input
         else:
             # Retrieve user_id from username and remove user from mapping
@@ -812,7 +853,7 @@ def find_persons_to_query(update, context):
             
             # Users left
             if users_left:
-                keyboard = generate_keyboard(users_left, 2, ['Done', 'Cancel'])
+                keyboard = generate_keyboard(users_left, 2, ['Done', 'Cancel', 'Select All'])
                 result = ""
                 names = context.chat_data['included_names']
                 for i in range(len(names)):
