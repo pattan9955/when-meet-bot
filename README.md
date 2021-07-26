@@ -1,6 +1,6 @@
 # README
 
-Created: July 20, 2021 1:25 AM
+Created: June 16 2021, 1:49 AM
 
 ## Team Name:
 
@@ -79,27 +79,27 @@ We hope to bypass the cumbersome process of planning and coordinating for groups
 
     group
 
-    groupid
+        groupid
 
-    users
+            users
 
-    userid
+                userid
 
-    'icalrep' : icalstr
+                    'icalrep' : icalstr
 
-    'dateupdated' : date
+                    'dateupdated' : date
 
     private
 
-    userid
+        userid
 
-    files
+            files
 
-    filename
+                filename
 
-    'icalrep' : icalstr
+                    'icalrep' : icalstr
 
-    'datecreated' :  date
+                    'datecreated' :  date
 
 4. Deployed Telegram bot on Heroku under "when-meet-bot".
 
