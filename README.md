@@ -503,6 +503,10 @@ We initially considered using Firebase Hosting to host our Telegram bot, but fou
     For the Telegram bot, however, we are restricted by the API, and are not able to fully apply this principle. The fact that we have to control the flow of the bot based on the usage through handlers makes it such that we are only able to isolate each function to be singular states, but not of singular responsibility as the principle states. 
 
     Moreover, most of our code does not involve OOP, and therefore could not apply the OOP principles, since it was abstracted away by the libraries we imported (e.g. `recurring-ical-events`).
+            
+    ### Separation of Concerns Principle (SoC):
+
+    For the Telegram bot, the general architecture of the bot requires us to use various types of handlers. To realize this principle, we gave each feature of our bot its own distinct ConversationHandler and a set of associated callback functions needed to run the handler. As such, each ConversationHandler is not reliant on any of the other ConversationHandlers (and their associated callback functions) which leads to modularity of the code. In essence, we are able to separate each feature into its own layer with its own distinct function, which directly ties in with the Separation of Concerns Principle. This modularity is maintained by using another ConversationHandler to essentially tie in all the features into a usable package for the end-user.
 
     ---
 
