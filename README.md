@@ -109,21 +109,22 @@ We hope to bypass the cumbersome process of planning and coordinating for groups
     - Make result formatting more intuitive for users to read
         - Informs users of spill-over timings as well as the date that a block of free time spills over to
         - Included day, as well as adjusted date formatting to DD-MM-YYYY
-        - Reimplemented the formatter in order to be able to process spill-overs more accurately in both parsing and calculation
+        - Reimplemented the result processing (from dictionaries of datetime objects as keys and boolean arrays as values to dictionaries of datetime objects as keys and start and end hour tuples as values) in order to be able to process intervals spanning days more accurately
+        - Reimplemented the parsing (dictionaries of datetime objects as keys and start and end hour tuples as values to dictionaries of formatted date strings as keys and formatted intervals as values) in order to be able to handle intervals spanning days more accurately 
     - Improve correctness of algorithm
-        - Allow algorithm to take input timings into account as well during calculations
-        - Perform unit testing on algorithm
+        - Allow algorithm to take input timings(HHMMSS) into account as well during calculations
 2. Implement/refine extra features for Telegram bot
     - Option for users to generate a poll based off the results of their search query
     - Allow group administrators to delete .ics files uploaded by members
     - Allow users to merge multiple calendars in PM
     - Made help menu more intuitive to navigate and provide more explanation pertaining to the workings of the bot.
     - Allow users to upload multiple files to the bot in PM without having to repeatedly call '/start'
-    - Display all previous included users when using the 'Find free times' function
+    - Display all previous included users/files when using the 'Find free times' function
     - Ask for confirmation before performing deletions when using the 'Clear files' function
+    - Allows users do 'blanket' operations e.g. "clear all" under clear, "download all" under download, etc. 
 3. Refined user interface to be more user friendly
     - Through the usage of Inline Keyboards instead of Reply Keyboards
-    - Through a redesign of program flow to allow all features to be accessed from a single command
+    - Through a redesign of program flow to allow all features to be accessed from a single command /start
     - Reimplemented program flow such that commands would not interrupt each other
 4. Allow users to download previously uploaded files
 5. Perform unit testing for validation of algorithm
