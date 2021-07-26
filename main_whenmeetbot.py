@@ -947,7 +947,7 @@ def find_min_interval(update, context):
                 for time in times:
                     result_cnt += 1
 
-            if chat_type == 'group' or chat_type == 'supergroup' and result_cnt > 1 and result_cnt <= 10:
+            if (chat_type == 'group' or chat_type == 'supergroup') and (result_cnt > 1 and result_cnt <= 10):
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Yes", callback_data="Yes"), InlineKeyboardButton(text="No", callback_data="No")]
                 ])
