@@ -7,7 +7,7 @@ from telegram.inline.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, Filters
 
 # For testing purposes
-from secret_token import TEST_TOKEN, DB_TOKEN
+# from secret_token import TEST_TOKEN, DB_TOKEN
 
 import pyrebase
 import os
@@ -44,11 +44,11 @@ from findtimes import *
 ) = map(chr, range(24))
 
 # For deployment
-# DB_TOKEN = os.environ.get("DB_TOKEN")
-# TOKEN = os.environ.get("TOKEN")
+DB_TOKEN = os.environ.get("DB_TOKEN")
+TOKEN = os.environ.get("TOKEN")
 
 # For testing
-TOKEN = TEST_TOKEN
+# TOKEN = TEST_TOKEN
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
