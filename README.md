@@ -77,29 +77,29 @@ We hope to bypass the cumbersome process of planning and coordinating for groups
     - Exiting at any part of the upload/query process
 3. Redesign data model to store file metadata (date, name) as shown below:
 
-    group
+        group
 
-        groupid
+            groupid
 
-            users
+                users
 
-                userid
+                    userid
 
-                    'icalrep' : icalstr
+                        'icalrep' : icalstr
 
-                    'dateupdated' : date
+                        'dateupdated' : date
 
-    private
+        private
 
-        userid
+            userid
 
-            files
+                files
 
-                filename
+                    filename
 
-                    'icalrep' : icalstr
+                        'icalrep' : icalstr
 
-                    'datecreated' :  date
+                        'datecreated' :  date
 
 4. Deployed Telegram bot on Heroku under "when-meet-bot".
 
